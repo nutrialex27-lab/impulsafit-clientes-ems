@@ -2,7 +2,7 @@
 
 Aplicación web instalable para dar de alta, buscar y editar clientes. Al crear una ficha se asignan un código, como `EMS-0001`, y la fecha de alta. Se puede buscar por nombre, móvil o código y filtrar por estado.
 
-En la ficha de cada cliente, abre **Intensidades EMS** para anotar el máster y los diez canales de Wiems PRO en mA. Cada sesión tiene fecha y permite registrar los valores por bloque. Los campos vacíos quedan sin registrar. Escribe `0` cuando quieras anotar 0 mA.
+Toca la ficha de un cliente para abrir **Intensidades EMS** y anotar el máster y los diez canales de Wiems PRO en mA. Cada sesión tiene fecha y permite registrar los valores por bloque. Los campos vacíos quedan sin registrar. Escribe `0` cuando quieras anotar 0 mA. Pulsa **Editar** para cambiar los datos del cliente.
 
 ## Uso e instalación
 

@@ -19,7 +19,6 @@ const clientList = byId("client-list");
 const directoryError = byId("directory-error");
 const feedback = byId("feedback");
 const editor = byId("client-dialog");
-const emsButton = byId("open-ems");
 const form = byId("client-form");
 const saveButton = byId("save-client");
 const clientError = byId("client-error");
@@ -68,8 +67,13 @@ function rowFor(client) {
   row.className = "client-row";
   const person = document.createElement("div");
   person.className = "client-person";
+  const open = makeText("button", "client-name", client.name);
+  open.type = "button";
+  open.setAttribute("aria-label", "Ver intensidades EMS de " + client.name);
+  open.setAttribute("aria-haspopup", "dialog");
+  open.addEventListener("click", () => openEmsPanel(client, refreshList));
   person.append(
-    makeText("strong", "", client.name),
+    open,
     makeText("span", "client-code", clientCode(client.id)),
   );
   const state = makeText("span", "state-pill", client.status);
@@ -130,7 +134,6 @@ function openEditor(client = null) {
     ? clientCode(client.id) + " · Alta el " + client.joinedOn.split("-").reverse().join("/")
     : "Introduce los datos de la ficha.";
   saveButton.textContent = client ? "Guardar cambios" : "Guardar cliente";
-  emsButton.hidden = !client;
   if (client) {
     byId("client-name").value = client.name;
     byId("client-phone").value = client.phone;
@@ -146,14 +149,6 @@ addOptions(statusFilter, statuses);
 addOptions(byId("client-status"), statuses);
 addOptions(byId("client-goal"), goals);
 creator.addEventListener("click", () => openEditor());
-emsButton.addEventListener("click", () => {
-  if (!editing) return;
-  const current = clients.find((client) => client.id === editing.id && client.revision === editing.revision);
-  openEmsPanel(current ?? editing, (saved) => {
-    editing = saved;
-    void refreshList();
-  });
-});
 search.addEventListener("input", renderList);
 statusFilter.addEventListener("change", renderList);
 byId("clear-filters").addEventListener("click", () => {

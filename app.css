@@ -167,13 +167,26 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
   font-size: .76rem;
 }
 .client-row {
+  position: relative;
   border-top: 1px solid var(--line);
   min-height: 70px;
   font-size: .875rem;
   overflow-wrap: anywhere;
 }
 .client-row:hover { background: #f7fafb; }
-.client-person strong { display: block; font-size: .96rem; }
+.client-name {
+  display: block;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #155d70;
+  font-size: .96rem;
+  font-weight: 700;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.client-name::after { content: ""; position: absolute; inset: 0; }
+.client-name:hover { text-decoration: underline; text-underline-offset: .16em; }
 .client-code { display: block; margin-top: 4px; font-size: .76rem; color: var(--muted); }
 .state-pill {
   justify-self: start;
@@ -187,7 +200,7 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
 .state-pill[data-state="Activo"] { background: #def4ee; color: #1e594b; }
 .state-pill[data-state="En pausa"] { background: #fbefda; color: #74520f; }
 .state-pill[data-state="Baja"] { background: #e8edf0; color: #46565f; }
-.edit-button { min-height: 39px; padding: 6px 8px; }
+.edit-button { position: relative; z-index: 1; min-height: 39px; padding: 6px 8px; }
 
 .empty { display: grid; justify-items: center; gap: 9px; padding: 61px 22px 64px; text-align: center; }
 .empty h2 { font-size: 1.2rem; letter-spacing: -.025em; }
@@ -253,7 +266,6 @@ textarea { display: block; resize: vertical; }
 .form-error { color: #892127; }
 .backup-actions { display: flex; flex-wrap: wrap; gap: 9px; }
 
-.ems-entry { justify-self: start; margin-top: 6px; }
 .ems-dialog { width: min(610px, calc(100% - 28px)); }
 .ems-client { overflow-wrap: anywhere; }
 .ems-history-heading {

@@ -1,6 +1,6 @@
 const scope = new URL(self.registration.scope);
 const cachePrefix = "impulsafit-ems:" + scope.pathname + ":";
-const cacheName = cachePrefix + "v2";
+const cacheName = cachePrefix + "v3";
 const home = new URL("index.html", scope).href;
 const assets = new Set([
   "index.html",
