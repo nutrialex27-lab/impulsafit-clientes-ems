@@ -1,12 +1,14 @@
 const scope = new URL(self.registration.scope);
 const cachePrefix = "impulsafit-ems:" + scope.pathname + ":";
-const cacheName = cachePrefix + "v1";
+const cacheName = cachePrefix + "v2";
 const home = new URL("index.html", scope).href;
 const assets = new Set([
   "index.html",
   "app.css",
   "app.js",
   "client-store.js",
+  "ems-panel.js",
+  "ems-sessions.js",
   "manifest.webmanifest",
   "icon-192.png",
   "icon-512.png",

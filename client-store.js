@@ -1,3 +1,5 @@
+import { readSession, validDate } from "./ems-sessions.js";
+
 export const statuses = Object.freeze(["Activo", "En pausa", "Baja"]);
 export const goals = Object.freeze([
   "Perder grasa",
@@ -117,14 +119,59 @@ export function saveClient(values, previous) {
   });
 }
 
+export function saveEmsSession(fields, client, previous) {
+  const session = {
+    ...readSession(fields),
+    id: previous?.id ?? crypto.randomUUID(),
+    revision: crypto.randomUUID(),
+  };
+  return transaction("readwrite", (store, setResult, abort) => {
+    const request = store.get(client.id);
+    request.onsuccess = () => {
+      const current = request.result;
+      if (!current || current.revision !== client.revision) {
+        abort(new Error("La ficha cambió desde que la abriste. Vuelve al listado y ábrela de nuevo."));
+        return;
+      }
+      const sessions = current.emsSessions ?? [];
+      const index = sessions.findIndex((stored) => stored.id === session.id);
+      if (previous && sessions[index]?.revision !== previous.revision) {
+        abort(new Error("La sesión cambió desde que la abriste. Vuelve a abrirla antes de editar."));
+        return;
+      }
+      const updated = [...sessions];
+      if (previous) updated[index] = session;
+      else updated.push(session);
+      const record = { ...current, emsSessions: updated };
+      store.put(record);
+      setResult(record);
+    };
+  });
+}
+
 export function encodeBackup(clients) {
-  const records = clients.map(({ revision, ...client }) => client);
-  return JSON.stringify({ format: backupFormat, version: 1, clients: records }, null, 2);
+  const records = clients.map(({ revision, emsSessions = [], ...client }) => ({
+    ...client,
+    emsSessions: emsSessions.map(({ revision: sessionRevision, ...session }) => session),
+  }));
+  return JSON.stringify({ format: backupFormat, version: 2, clients: records }, null, 2);
+}
+
+function decodeSessions(sessions) {
+  if (!Array.isArray(sessions)) throw new Error("La copia contiene un historial EMS inválido.");
+  const ids = new Set();
+  return sessions.map((session) => {
+    if (!session || typeof session.id !== "string" || !session.id || ids.has(session.id)) {
+      throw new Error("La copia contiene sesiones EMS inválidas o repetidas.");
+    }
+    ids.add(session.id);
+    return { ...readSession(session), id: session.id };
+  });
 }
 
 export function decodeBackup(contents) {
   const backup = JSON.parse(contents);
-  if (backup?.format !== backupFormat || backup.version !== 1 || !Array.isArray(backup.clients)) {
+  if (backup?.format !== backupFormat || ![1, 2].includes(backup.version) || !Array.isArray(backup.clients)) {
     throw new Error("Selecciona una copia de seguridad de Clientes EMS.");
   }
   const ids = new Set();
@@ -133,15 +180,12 @@ export function decodeBackup(contents) {
       throw new Error("La copia contiene códigos de cliente inválidos o repetidos.");
     }
     const { id, joinedOn } = client;
-    if (typeof joinedOn !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(joinedOn)) {
-      throw new Error("La copia contiene una fecha de alta inválida.");
-    }
-    const joinedDate = new Date(joinedOn + "T00:00:00Z");
-    if (!Number.isFinite(joinedDate.getTime()) || joinedDate.toISOString().slice(0, 10) !== joinedOn) {
+    if (!validDate(joinedOn)) {
       throw new Error("La copia contiene una fecha de alta inválida.");
     }
     ids.add(id);
-    return { ...readFields(client), id, joinedOn };
+    const emsSessions = backup.version === 2 ? decodeSessions(client.emsSessions) : [];
+    return { ...readFields(client), id, joinedOn, emsSessions };
   });
 }
 
@@ -149,7 +193,11 @@ export function restoreBackup(clients) {
   return transaction("readwrite", (store) => {
     store.clear();
     for (const client of clients) {
-      store.add({ ...client, revision: crypto.randomUUID() });
+      const emsSessions = (client.emsSessions ?? []).map((session) => ({
+        ...session,
+        revision: crypto.randomUUID(),
+      }));
+      store.add({ ...client, revision: crypto.randomUUID(), emsSessions });
     }
   });
 }

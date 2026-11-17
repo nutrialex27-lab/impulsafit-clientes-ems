@@ -9,6 +9,7 @@ import {
   statuses,
   today,
 } from "./client-store.js";
+import { openEmsPanel } from "./ems-panel.js";
 
 const byId = (id) => document.getElementById(id);
 const creator = byId("new-client");
@@ -18,6 +19,7 @@ const clientList = byId("client-list");
 const directoryError = byId("directory-error");
 const feedback = byId("feedback");
 const editor = byId("client-dialog");
+const emsButton = byId("open-ems");
 const form = byId("client-form");
 const saveButton = byId("save-client");
 const clientError = byId("client-error");
@@ -128,6 +130,7 @@ function openEditor(client = null) {
     ? clientCode(client.id) + " · Alta el " + client.joinedOn.split("-").reverse().join("/")
     : "Introduce los datos de la ficha.";
   saveButton.textContent = client ? "Guardar cambios" : "Guardar cliente";
+  emsButton.hidden = !client;
   if (client) {
     byId("client-name").value = client.name;
     byId("client-phone").value = client.phone;
@@ -143,6 +146,14 @@ addOptions(statusFilter, statuses);
 addOptions(byId("client-status"), statuses);
 addOptions(byId("client-goal"), goals);
 creator.addEventListener("click", () => openEditor());
+emsButton.addEventListener("click", () => {
+  if (!editing) return;
+  const current = clients.find((client) => client.id === editing.id && client.revision === editing.revision);
+  openEmsPanel(current ?? editing, (saved) => {
+    editing = saved;
+    void refreshList();
+  });
+});
 search.addEventListener("input", renderList);
 statusFilter.addEventListener("change", renderList);
 byId("clear-filters").addEventListener("click", () => {

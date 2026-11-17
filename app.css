@@ -253,6 +253,69 @@ textarea { display: block; resize: vertical; }
 .form-error { color: #892127; }
 .backup-actions { display: flex; flex-wrap: wrap; gap: 9px; }
 
+.ems-entry { justify-self: start; margin-top: 6px; }
+.ems-dialog { width: min(610px, calc(100% - 28px)); }
+.ems-client { overflow-wrap: anywhere; }
+.ems-history-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.ems-history-heading h3, .ems-channels-heading {
+  margin: 0;
+  font-size: .95rem;
+}
+.ems-empty { color: var(--muted); font-size: .875rem; padding: 12px 0; }
+.ems-history { display: grid; gap: 7px; list-style: none; margin: 0; padding: 0; }
+.ems-history-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 11px 12px;
+  min-height: 47px;
+  text-align: left;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+}
+.ems-history-item:hover { background: #eaf4f6; }
+.ems-history-item span { color: var(--muted); font-size: .82rem; white-space: nowrap; }
+.ems-controls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.ems-field {
+  display: grid;
+  align-content: start;
+  gap: 5px;
+  min-width: 0;
+  font-size: .875rem;
+  font-weight: 700;
+}
+.ems-field input, .ems-field select { font-weight: 400; font-size: 1rem; }
+.ems-master {
+  background: #e4f5f7;
+  border: 1px solid #c6e6eb;
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin: 14px 0;
+}
+.ems-master .ems-field { max-width: 175px; }
+.ems-channels-heading { margin-bottom: 10px; }
+.ems-channels {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 11px 12px;
+}
+.ems-number { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 6px; }
+.ems-number > span { color: var(--muted); font-size: .76rem; font-weight: 600; }
+
 @media (max-width: 655px) {
   .topbar-inner, .page { padding-left: 16px; padding-right: 16px; }
   .topbar-inner { min-height: 60px; }
@@ -275,5 +338,7 @@ textarea { display: block; resize: vertical; }
   .top-action { padding: 0 10px; }
   .fields input, .fields select, .fields textarea { font-size: 1rem; }
   .field-row { grid-template-columns: 1fr; }
+  .ems-controls { grid-template-columns: 1fr; }
+  .ems-channels { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   dialog { padding: 17px; }
 }

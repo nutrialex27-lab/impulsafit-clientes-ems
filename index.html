@@ -69,6 +69,7 @@
       <div class="dialog-heading">
         <h2 id="client-dialog-title">Nuevo cliente</h2>
         <p class="dialog-caption" id="client-meta">Introduce los datos de la ficha.</p>
+        <button class="button secondary ems-entry" id="open-ems" type="button" hidden>Intensidades EMS</button>
       </div>
       <div class="fields">
         <label for="client-name">Nombre y apellidos</label>
@@ -95,6 +96,47 @@
       <div class="dialog-actions">
         <button class="button secondary" id="cancel-client" type="button">Cancelar</button>
         <button class="button primary" id="save-client" type="submit">Guardar cliente</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="ems-dialog" id="ems-dialog" aria-labelledby="ems-title">
+    <div class="dialog-heading">
+      <h2 id="ems-title">Intensidades EMS</h2>
+      <p class="dialog-caption ems-client" id="ems-client"></p>
+    </div>
+
+    <section id="ems-overview" aria-labelledby="ems-history-title">
+      <div class="ems-history-heading">
+        <h3 id="ems-history-title">Sesiones</h3>
+        <button class="button primary" id="new-ems-session" type="button">Nueva sesión</button>
+      </div>
+      <p class="ems-empty" id="ems-empty">Aún no hay sesiones de intensidades.</p>
+      <ul class="ems-history" id="ems-history"></ul>
+      <p class="feedback" id="ems-feedback" role="status"></p>
+      <div class="dialog-actions">
+        <button class="button secondary" id="close-ems" type="button">Volver a la ficha</button>
+      </div>
+    </section>
+
+    <form id="ems-form" hidden>
+      <div class="ems-controls">
+        <label class="ems-field">
+          <span>Fecha de sesión</span>
+          <input id="ems-date" type="date" required>
+        </label>
+        <label class="ems-field">
+          <span>Bloque</span>
+          <select id="ems-block"></select>
+        </label>
+      </div>
+      <div class="ems-master" id="ems-master-field"></div>
+      <h3 class="ems-channels-heading">Canales</h3>
+      <div class="ems-channels" id="ems-channels"></div>
+      <p class="form-error" id="ems-error" role="alert" hidden></p>
+      <div class="dialog-actions">
+        <button class="button secondary" id="cancel-ems-session" type="button">Cancelar</button>
+        <button class="button primary" id="save-ems-session" type="submit">Guardar sesión</button>
       </div>
     </form>
   </dialog>
