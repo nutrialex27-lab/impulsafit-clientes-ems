@@ -311,6 +311,10 @@ textarea { display: block; resize: vertical; }
   font-weight: 700;
 }
 .ems-field input, .ems-field select { font-weight: 400; font-size: 1rem; }
+.ems-photo { margin-top: 14px; }
+.ems-photo-status { margin-top: 6px; color: var(--muted); font-size: .875rem; }
+.ems-photo-status:empty { display: none; }
+.ems-photo-rows { margin-top: 10px; }
 .ems-master {
   background: #e4f5f7;
   border: 1px solid #c6e6eb;

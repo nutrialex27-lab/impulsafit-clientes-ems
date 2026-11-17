@@ -1,5 +1,6 @@
 import { clientCode, saveEmsSession, today } from "./client-store.js";
 import { blocks, channels } from "./ems-sessions.js";
+import { readWiemsPhoto } from "./ems-ocr.js";
 
 const byId = (id) => document.getElementById(id);
 const dialog = byId("ems-dialog");
@@ -13,6 +14,11 @@ const cancelButton = byId("cancel-ems-session");
 const newButton = byId("new-ems-session");
 const error = byId("ems-error");
 const feedback = byId("ems-feedback");
+const photoButton = byId("ems-photo-button");
+const photoFile = byId("ems-photo-file");
+const photoStatus = byId("ems-photo-status");
+const photoRows = byId("ems-photo-rows");
+const photoRow = byId("ems-photo-row");
 
 const inputs = new Map();
 let client;
@@ -20,6 +26,7 @@ let onSave;
 let session;
 let draft;
 let activeBlock;
+let pendingPhoto;
 
 function addInput(container, id, label) {
   const field = document.createElement("label");
@@ -94,6 +101,9 @@ function editSession(existing = null) {
   activeBlock = blocks.find(([id]) => draft[id])?.[0] ?? blocks[0][0];
   blockPicker.value = activeBlock;
   error.hidden = true;
+  photoStatus.textContent = "";
+  photoRows.hidden = true;
+  pendingPhoto = undefined;
   showBlock();
   overview.hidden = true;
   form.hidden = false;
@@ -123,6 +133,74 @@ blockPicker.addEventListener("change", () => {
   rememberBlock();
   activeBlock = blockPicker.value;
   showBlock();
+});
+
+function photoStillOpen(job) {
+  return dialog.open && !form.hidden && draft === job.draft;
+}
+
+function fillFromPhoto(job, values) {
+  if (!photoStillOpen(job)) return;
+  if (activeBlock === job.block) rememberBlock();
+  const target = draft[job.block];
+  const untouched = Object.entries(values).filter(([id]) => target[id] === job.before[id]);
+  Object.assign(target, Object.fromEntries(untouched));
+  if (activeBlock === job.block) showBlock();
+  const label = blockPicker.querySelector('[value="' + job.block + '"]').textContent;
+  const count = untouched.length;
+  photoStatus.textContent = count
+    ? count + " de 11 campos rellenados en " + label + ". Revisa los valores antes de guardar."
+    : "Se mantuvieron los valores que editaste durante la lectura.";
+  photoRows.hidden = true;
+  pendingPhoto = undefined;
+}
+
+photoButton.addEventListener("click", () => photoFile.click());
+
+photoFile.addEventListener("change", async () => {
+  const file = photoFile.files[0];
+  photoFile.value = "";
+  if (!file || photoButton.disabled || form.hidden) return;
+  rememberBlock();
+  const job = { draft, block: activeBlock, before: { ...draft[activeBlock] } };
+  photoButton.disabled = true;
+  photoStatus.textContent = "Leyendo la foto…";
+  photoRows.hidden = true;
+  pendingPhoto = undefined;
+  try {
+    const rows = await readWiemsPhoto(file);
+    if (!photoStillOpen(job)) return;
+    if (!rows.some((values) => Object.keys(values).length)) {
+      photoStatus.textContent = "Usa una foto nítida y de frente en la que se vean los canales y el máster de Wiems PRO.";
+      return;
+    }
+    if (rows.length === 1) {
+      fillFromPhoto(job, rows[0]);
+      return;
+    }
+    pendingPhoto = { job, rows };
+    photoRow.replaceChildren(new Option("Elige una fila", ""));
+    for (const [index, values] of rows.entries()) {
+      const count = Object.keys(values).length;
+      const option = new Option("Fila " + (index + 1) + " · " + count + " de 11 valores", String(index));
+      option.disabled = count === 0;
+      photoRow.add(option);
+    }
+    photoRows.hidden = false;
+    photoStatus.textContent = "La foto contiene varias filas de valores.";
+  } catch {
+    if (photoStillOpen(job)) {
+      photoStatus.textContent = "No se pudo leer la foto. Abre la app con conexión y elige una captura JPG o PNG.";
+    }
+  } finally {
+    photoButton.disabled = false;
+  }
+});
+
+photoRow.addEventListener("change", () => {
+  if (pendingPhoto && photoRow.value !== "") {
+    fillFromPhoto(pendingPhoto.job, pendingPhoto.rows[Number(photoRow.value)]);
+  }
 });
 
 form.addEventListener("submit", async (event) => {

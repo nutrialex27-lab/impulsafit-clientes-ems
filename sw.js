@@ -1,6 +1,7 @@
 const scope = new URL(self.registration.scope);
 const cachePrefix = "impulsafit-ems:" + scope.pathname + ":";
-const cacheName = cachePrefix + "v3";
+const cacheName = cachePrefix + "v4";
+const ocrCacheName = "impulsafit-ocr:6.0.1:" + scope.pathname;
 const home = new URL("index.html", scope).href;
 const assets = new Set([
   "index.html",
@@ -9,11 +10,21 @@ const assets = new Set([
   "client-store.js",
   "ems-panel.js",
   "ems-sessions.js",
+  "ems-ocr.js",
+  "wiems-values.js",
   "manifest.webmanifest",
   "icon-192.png",
   "icon-512.png",
   "icon-maskable.png",
   "apple-touch-icon.png",
+].map((file) => new URL(file, scope).href));
+
+const ocrAssets = new Set([
+  "tesseract.min.js",
+  "worker.min.js",
+  "tesseract-core-lstm.wasm.js",
+  "tesseract-core-simd-lstm.wasm.js",
+  "eng.traineddata.gz",
 ].map((file) => new URL(file, scope).href));
 
 self.addEventListener("install", (event) => {
@@ -48,6 +59,15 @@ self.addEventListener("fetch", (event) => {
     event.respondWith((async () => {
       const cache = await caches.open(cacheName);
       return (await cache.match(request)) ?? fetch(request);
+    })());
+  } else if (ocrAssets.has(url.href)) {
+    event.respondWith((async () => {
+      const cache = await caches.open(ocrCacheName);
+      const cached = await cache.match(request);
+      if (cached) return cached;
+      const response = await fetch(request);
+      if (response.ok) await cache.put(request, response.clone()).catch(() => {});
+      return response;
     })());
   }
 });
