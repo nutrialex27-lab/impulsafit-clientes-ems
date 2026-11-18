@@ -4,7 +4,7 @@ Aplicación web instalable para dar de alta, buscar y editar clientes. Al crear 
 
 Toca la ficha de un cliente para abrir **Intensidades EMS** y anotar el máster y los diez canales de Wiems PRO en mA. Cada sesión tiene fecha y permite registrar los valores por bloque. Los campos vacíos quedan sin registrar. Escribe `0` cuando quieras anotar 0 mA. Pulsa **Editar** para cambiar los datos del cliente.
 
-Elige el bloque y pulsa **Rellenar con foto** para leer una captura de Wiems PRO que muestre los nombres de canal, sus valores en mA y el máster. Si aparecen varias filas, selecciona la del cliente. Revisa los valores antes de pulsar **Guardar sesión**. La captura se procesa en el dispositivo con Tesseract.js. Abre la app con conexión la primera vez que uses el lector para descargar su motor y el modelo de texto.
+Elige el bloque y pulsa **Escanear con cámara**. Permite el acceso a la cámara y encuadra los canales con sus valores en mA y el máster de Wiems PRO. Pulsa **Leer intensidades**. Si aparecen varias filas, selecciona la del cliente. Revisa los valores antes de pulsar **Guardar sesión**. El lector de Tesseract.js procesa el fotograma en el dispositivo, en memoria. Abre la app con conexión la primera vez que uses el lector para descargar su motor y el modelo de texto.
 
 ## Uso e instalación
 
@@ -19,7 +19,7 @@ Sirve la raíz del repositorio con un servidor local. Por ejemplo, ejecuta `pyth
 - `index.html`, `app.css` y `app.js` definen el listado, los formularios y las acciones.
 - `client-store.js` contiene la validación y el almacenamiento en IndexedDB. Cada ficha conserva sus sesiones en `emsSessions`.
 - `ems-panel.js` controla el historial y el formulario de intensidades. `ems-sessions.js` define los bloques, los canales y su validación.
-- `ems-ocr.js` y `wiems-values.js` leen la captura y alinean los números con los canales de Wiems PRO. Consulta `OCR-LICENSE.txt` para las versiones y licencias del motor.
+- `ems-ocr.js` y `wiems-values.js` leen el fotograma de la cámara y alinean los números con los canales de Wiems PRO. Consulta `OCR-LICENSE.txt` para las versiones y licencias del motor.
 - `manifest.webmanifest` y `sw.js` habilitan la instalación y el acceso sin conexión. Actualiza la versión de caché en `sw.js` al publicar cambios de la app.
 
 Sube al repositorio el código de la app. Conserva tus copias de clientes fuera del repositorio.

@@ -129,13 +129,12 @@
           <select id="ems-block"></select>
         </label>
       </div>
-      <div class="ems-photo">
-        <button class="button secondary" id="ems-photo-button" type="button">Rellenar con foto</button>
-        <input id="ems-photo-file" type="file" accept="image/*" hidden>
-        <p class="ems-photo-status" id="ems-photo-status" role="status"></p>
-        <label class="ems-field ems-photo-rows" id="ems-photo-rows" hidden>
+      <div class="ems-scan">
+        <button class="button secondary" id="ems-scan-button" type="button" aria-haspopup="dialog">Escanear con cámara</button>
+        <p class="ems-scan-status" id="ems-scan-status" role="status"></p>
+        <label class="ems-field ems-scan-rows" id="ems-scan-rows" hidden>
           <span>Fila del cliente, de arriba abajo</span>
-          <select id="ems-photo-row"></select>
+          <select id="ems-scan-row"></select>
         </label>
       </div>
       <div class="ems-master" id="ems-master-field"></div>
@@ -147,6 +146,19 @@
         <button class="button primary" id="save-ems-session" type="submit">Guardar sesión</button>
       </div>
     </form>
+  </dialog>
+
+  <dialog class="ems-camera-dialog" id="ems-camera-dialog" aria-labelledby="ems-camera-title" aria-describedby="ems-camera-guide">
+    <div class="dialog-heading">
+      <h2 id="ems-camera-title">Escanear intensidades</h2>
+      <p class="dialog-caption" id="ems-camera-guide">Acerca la cámara y encuadra de frente los canales y el máster de Wiems PRO.</p>
+    </div>
+    <video class="ems-camera-view" id="ems-camera-video" autoplay muted playsinline></video>
+    <p class="ems-scan-status" id="ems-camera-status" role="status"></p>
+    <div class="dialog-actions">
+      <button class="button secondary" id="ems-camera-close" type="button">Cerrar cámara</button>
+      <button class="button primary" id="ems-camera-read" type="button" disabled>Leer intensidades</button>
+    </div>
   </dialog>
 
   <dialog id="backups-dialog" aria-labelledby="backups-title">

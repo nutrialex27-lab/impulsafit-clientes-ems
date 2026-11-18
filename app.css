@@ -311,10 +311,20 @@ textarea { display: block; resize: vertical; }
   font-weight: 700;
 }
 .ems-field input, .ems-field select { font-weight: 400; font-size: 1rem; }
-.ems-photo { margin-top: 14px; }
-.ems-photo-status { margin-top: 6px; color: var(--muted); font-size: .875rem; }
-.ems-photo-status:empty { display: none; }
-.ems-photo-rows { margin-top: 10px; }
+.ems-scan { margin-top: 14px; }
+.ems-scan-status { margin-top: 6px; color: var(--muted); font-size: .875rem; }
+.ems-scan-status:empty { margin: 0; }
+.ems-scan-rows { margin-top: 10px; }
+.ems-camera-dialog { width: min(760px, calc(100% - 28px)); }
+.ems-camera-view {
+  display: block;
+  width: 100%;
+  max-height: max(90px, min(56dvh, calc(100dvh - 190px)));
+  aspect-ratio: auto 16 / 9;
+  object-fit: contain;
+  border-radius: 9px;
+  background: var(--ink);
+}
 .ems-master {
   background: #e4f5f7;
   border: 1px solid #c6e6eb;

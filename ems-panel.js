@@ -1,6 +1,6 @@
 import { clientCode, saveEmsSession, today } from "./client-store.js";
 import { blocks, channels } from "./ems-sessions.js";
-import { readWiemsPhoto } from "./ems-ocr.js";
+import { readWiemsFrame } from "./ems-ocr.js";
 
 const byId = (id) => document.getElementById(id);
 const dialog = byId("ems-dialog");
@@ -14,11 +14,14 @@ const cancelButton = byId("cancel-ems-session");
 const newButton = byId("new-ems-session");
 const error = byId("ems-error");
 const feedback = byId("ems-feedback");
-const photoButton = byId("ems-photo-button");
-const photoFile = byId("ems-photo-file");
-const photoStatus = byId("ems-photo-status");
-const photoRows = byId("ems-photo-rows");
-const photoRow = byId("ems-photo-row");
+const scanButton = byId("ems-scan-button");
+const scanStatus = byId("ems-scan-status");
+const scanRows = byId("ems-scan-rows");
+const scanRow = byId("ems-scan-row");
+const cameraDialog = byId("ems-camera-dialog");
+const cameraVideo = byId("ems-camera-video");
+const cameraStatus = byId("ems-camera-status");
+const cameraRead = byId("ems-camera-read");
 
 const inputs = new Map();
 let client;
@@ -26,7 +29,8 @@ let onSave;
 let session;
 let draft;
 let activeBlock;
-let pendingPhoto;
+let pendingScan;
+let cameraRequest;
 
 function addInput(container, id, label) {
   const field = document.createElement("label");
@@ -101,9 +105,9 @@ function editSession(existing = null) {
   activeBlock = blocks.find(([id]) => draft[id])?.[0] ?? blocks[0][0];
   blockPicker.value = activeBlock;
   error.hidden = true;
-  photoStatus.textContent = "";
-  photoRows.hidden = true;
-  pendingPhoto = undefined;
+  scanStatus.textContent = "";
+  scanRows.hidden = true;
+  pendingScan = undefined;
   showBlock();
   overview.hidden = true;
   form.hidden = false;
@@ -135,12 +139,12 @@ blockPicker.addEventListener("change", () => {
   showBlock();
 });
 
-function photoStillOpen(job) {
+function scanStillOpen(job) {
   return dialog.open && !form.hidden && draft === job.draft;
 }
 
-function fillFromPhoto(job, values) {
-  if (!photoStillOpen(job)) return;
+function fillFromScan(job, values) {
+  if (!scanStillOpen(job)) return;
   if (activeBlock === job.block) rememberBlock();
   const target = draft[job.block];
   const untouched = Object.entries(values).filter(([id]) => target[id] === job.before[id]);
@@ -148,58 +152,126 @@ function fillFromPhoto(job, values) {
   if (activeBlock === job.block) showBlock();
   const label = blockPicker.querySelector('[value="' + job.block + '"]').textContent;
   const count = untouched.length;
-  photoStatus.textContent = count
-    ? count + " de 11 campos rellenados en " + label + ". Revisa los valores antes de guardar."
+  scanStatus.textContent = count
+    ? count + " de " + inputs.size + " campos rellenados en " + label + ". Revisa los valores antes de guardar."
     : "Se mantuvieron los valores que editaste durante la lectura.";
-  photoRows.hidden = true;
-  pendingPhoto = undefined;
+  scanRows.hidden = true;
+  pendingScan = undefined;
 }
 
-photoButton.addEventListener("click", () => photoFile.click());
+function stopStream(stream) {
+  stream?.getTracks().forEach((track) => track.stop());
+}
 
-photoFile.addEventListener("change", async () => {
-  const file = photoFile.files[0];
-  photoFile.value = "";
-  if (!file || photoButton.disabled || form.hidden) return;
-  rememberBlock();
-  const job = { draft, block: activeBlock, before: { ...draft[activeBlock] } };
-  photoButton.disabled = true;
-  photoStatus.textContent = "Leyendo la foto…";
-  photoRows.hidden = true;
-  pendingPhoto = undefined;
+function stopCamera() {
+  cameraRequest = undefined;
+  cameraRead.disabled = true;
+  const stream = cameraVideo.srcObject;
+  cameraVideo.srcObject = null;
+  stopStream(stream);
+}
+
+function closeCamera() {
+  stopCamera();
+  if (cameraDialog.open) cameraDialog.close();
+}
+
+function cameraIsOpen(request) {
+  return cameraDialog.open && cameraRequest === request;
+}
+
+scanButton.addEventListener("click", async () => {
+  const request = {};
+  cameraRequest = request;
+  cameraStatus.textContent = "Abriendo la cámara…";
+  cameraDialog.showModal();
+  if (!navigator.mediaDevices?.getUserMedia) {
+    cameraStatus.textContent = "Abre la app en un navegador con acceso a la cámara.";
+    return;
+  }
   try {
-    const rows = await readWiemsPhoto(file);
-    if (!photoStillOpen(job)) return;
-    if (!rows.some((values) => Object.keys(values).length)) {
-      photoStatus.textContent = "Usa una foto nítida y de frente en la que se vean los canales y el máster de Wiems PRO.";
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: false,
+      video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+    });
+    if (!cameraIsOpen(request)) {
+      stopStream(stream);
       return;
     }
-    if (rows.length === 1) {
-      fillFromPhoto(job, rows[0]);
-      return;
+    cameraVideo.srcObject = stream;
+    stream.getVideoTracks()[0]?.addEventListener("ended", () => {
+      if (!cameraIsOpen(request)) return;
+      stopCamera();
+      cameraStatus.textContent = "La cámara se ha desconectado. Cierra y vuelve a abrir el escáner.";
+    }, { once: true });
+    await cameraVideo.play();
+    if (!cameraIsOpen(request)) return;
+    cameraRead.disabled = false;
+    cameraStatus.textContent = "";
+  } catch (failure) {
+    if (!cameraIsOpen(request)) return;
+    stopCamera();
+    if (failure.name === "NotAllowedError") {
+      cameraStatus.textContent = "Permite el acceso a la cámara en los ajustes del sitio y vuelve a abrir el escáner.";
+    } else if (failure.name === "NotFoundError") {
+      cameraStatus.textContent = "No se encontró una cámara en este dispositivo.";
+    } else {
+      cameraStatus.textContent = "No se pudo abrir la cámara. Cierra otras apps que la estén usando e inténtalo de nuevo.";
     }
-    pendingPhoto = { job, rows };
-    photoRow.replaceChildren(new Option("Elige una fila", ""));
-    for (const [index, values] of rows.entries()) {
-      const count = Object.keys(values).length;
-      const option = new Option("Fila " + (index + 1) + " · " + count + " de 11 valores", String(index));
-      option.disabled = count === 0;
-      photoRow.add(option);
-    }
-    photoRows.hidden = false;
-    photoStatus.textContent = "La foto contiene varias filas de valores.";
-  } catch {
-    if (photoStillOpen(job)) {
-      photoStatus.textContent = "No se pudo leer la foto. Abre la app con conexión y elige una captura JPG o PNG.";
-    }
-  } finally {
-    photoButton.disabled = false;
   }
 });
 
-photoRow.addEventListener("change", () => {
-  if (pendingPhoto && photoRow.value !== "") {
-    fillFromPhoto(pendingPhoto.job, pendingPhoto.rows[Number(photoRow.value)]);
+byId("ems-camera-close").addEventListener("click", closeCamera);
+cameraDialog.addEventListener("cancel", (event) => {
+  event.preventDefault();
+  closeCamera();
+});
+window.addEventListener("pagehide", closeCamera);
+
+cameraRead.addEventListener("click", async () => {
+  if (cameraRead.disabled || form.hidden) return;
+  rememberBlock();
+  const job = { draft, block: activeBlock, before: { ...draft[activeBlock] } };
+  scanButton.disabled = true;
+  scanStatus.textContent = "Leyendo intensidades…";
+  scanRows.hidden = true;
+  pendingScan = undefined;
+  try {
+    // Copia el fotograma antes de cerrar la cámara.
+    const reading = readWiemsFrame(cameraVideo);
+    closeCamera();
+    const rows = await reading;
+    if (!scanStillOpen(job)) return;
+    if (!rows.some((values) => Object.keys(values).length)) {
+      scanStatus.textContent = "Vuelve a escanear de frente, con los canales y el máster visibles y sin reflejos.";
+      return;
+    }
+    if (rows.length === 1) {
+      fillFromScan(job, rows[0]);
+      return;
+    }
+    pendingScan = { job, rows };
+    scanRow.replaceChildren(new Option("Elige una fila", ""));
+    for (const [index, values] of rows.entries()) {
+      const count = Object.keys(values).length;
+      const option = new Option("Fila " + (index + 1) + " · " + count + " de " + inputs.size + " valores", String(index));
+      option.disabled = count === 0;
+      scanRow.add(option);
+    }
+    scanRows.hidden = false;
+    scanStatus.textContent = "Se han detectado varias filas de valores.";
+  } catch {
+    if (scanStillOpen(job)) {
+      scanStatus.textContent = "No se pudo completar la lectura. Abre la app con conexión y vuelve a escanear.";
+    }
+  } finally {
+    scanButton.disabled = false;
+  }
+});
+
+scanRow.addEventListener("change", () => {
+  if (pendingScan && scanRow.value !== "") {
+    fillFromScan(pendingScan.job, pendingScan.rows[Number(scanRow.value)]);
   }
 });
 

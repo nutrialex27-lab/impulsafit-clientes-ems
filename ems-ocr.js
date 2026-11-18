@@ -14,7 +14,7 @@ function loadEngine() {
       script.onerror = () => {
         script.remove();
         scriptReady = undefined;
-        reject(new Error("Conéctate a internet para iniciar el lector de fotos."));
+        reject(new Error("Conéctate a internet para iniciar el lector de intensidades."));
       };
       document.head.append(script);
     });
@@ -22,28 +22,22 @@ function loadEngine() {
   return scriptReady;
 }
 
-async function photoCanvas(file) {
-  let image;
-  try {
-    image = await createImageBitmap(file);
-  } catch {
-    throw new Error("No se ha podido abrir la imagen. Prueba con una foto JPG o PNG.");
+function frameCanvas(video) {
+  const { videoWidth, videoHeight } = video;
+  if (!videoWidth || !videoHeight || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+    throw new Error("La cámara aún no tiene imagen.");
   }
-  try {
-    const scale = Math.min(3, 2200 / Math.max(image.width, image.height));
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.round(image.width * scale);
-    canvas.height = Math.round(image.height * scale);
-    const context = canvas.getContext("2d", { alpha: false });
-    context.imageSmoothingQuality = "high";
-    context.drawImage(image, 0, 0, canvas.width, canvas.height);
-    return canvas;
-  } finally {
-    image.close();
-  }
+  const scale = Math.min(3, 2200 / Math.max(videoWidth, videoHeight));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(videoWidth * scale);
+  canvas.height = Math.round(videoHeight * scale);
+  const context = canvas.getContext("2d", { alpha: false });
+  context.imageSmoothingQuality = "high";
+  context.drawImage(video, 0, 0, canvas.width, canvas.height);
+  return canvas;
 }
 
-function valueCrop(photo, layout, row, rank, master = false) {
+function valueCrop(frame, layout, row, rank, master = false) {
   const { x, step, tilt } = layout;
   const center = x + (rank + (master ? .03 : 0)) * step;
   const y = row.y + tilt * (center - x);
@@ -60,7 +54,7 @@ function valueCrop(photo, layout, row, rank, master = false) {
   context.fillRect(0, 0, crop.width, crop.height);
   context.setTransform(scale, -scale * tilt, 0, scale,
     scale * (width / 2 - center), scale * (tilt * center - top));
-  context.drawImage(photo, 0, 0);
+  context.drawImage(frame, 0, 0);
   return crop;
 }
 
@@ -95,13 +89,26 @@ function startWorker(engine) {
   });
 }
 
-export async function readWiemsPhoto(file) {
-  const [engine, photo] = await Promise.all([loadEngine(), photoCanvas(file)]);
+export async function readWiemsFrame(video) {
+  const frame = frameCanvas(video);
+  const engine = await loadEngine();
   const worker = await startWorker(engine);
   try {
     await worker.setParameters({ tessedit_pageseg_mode: engine.PSM.SPARSE_TEXT });
-    const first = await worker.recognize(photo, {}, { tsv: true });
-    const { layout, rows, globalMaster } = scanWiemsScreen(first.data.tsv, photo.width);
+    const first = await worker.recognize(frame, {}, { tsv: true });
+    let scan = scanWiemsScreen(first.data.tsv, frame.width);
+    if (!scan.rows.length) {
+      const grayscale = document.createElement("canvas");
+      grayscale.width = frame.width;
+      grayscale.height = frame.height;
+      const context = grayscale.getContext("2d", { alpha: false });
+      context.filter = "grayscale(1)";
+      context.drawImage(frame, 0, 0);
+      await worker.setParameters({ tessedit_pageseg_mode: engine.PSM.SINGLE_BLOCK });
+      const retry = await worker.recognize(grayscale, {}, { tsv: true });
+      scan = scanWiemsScreen(retry.data.tsv, frame.width);
+    }
+    const { layout, rows, globalMaster } = scan;
     const results = [];
 
     for (const row of rows) {
@@ -112,7 +119,7 @@ export async function readWiemsPhoto(file) {
       });
       for (const [rank, [id]] of channels.entries()) {
         if (values[id] !== undefined) continue;
-        const tile = valueCrop(photo, layout, row, rank);
+        const tile = valueCrop(frame, layout, row, rank);
         const result = await worker.recognize(tile, {}, { tsv: true });
         const prior = row.reads.get(rank)?.value;
         let value = readMilliampCrop(result.data.tsv, prior);
@@ -125,7 +132,7 @@ export async function readWiemsPhoto(file) {
       let master = row.master;
       if (master === undefined) {
         await worker.setParameters({ tessedit_pageseg_mode: engine.PSM.SINGLE_BLOCK });
-        const tile = valueCrop(photo, layout, row, channels.length, true);
+        const tile = valueCrop(frame, layout, row, channels.length, true);
         const result = await worker.recognize(tile, {}, { tsv: true });
         master = readMilliampCrop(result.data.tsv);
       }
