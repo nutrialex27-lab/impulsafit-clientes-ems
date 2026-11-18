@@ -54,6 +54,7 @@
         <span>Cliente</span><span>Móvil</span><span>Objetivo</span><span>Estado</span><span></span>
       </div>
       <ul class="client-list" id="client-list" aria-label="Fichas de clientes" hidden></ul>
+      <p class="client-list-hint" id="client-list-hint" hidden>Mantén pulsada una ficha para eliminar el cliente.</p>
 
       <div class="empty" id="empty-state" hidden>
         <span class="card-icon" aria-hidden="true"></span>
@@ -100,6 +101,19 @@
         <button class="button primary" id="save-client" type="submit">Guardar cliente</button>
       </div>
     </form>
+  </dialog>
+
+  <dialog class="client-actions" id="client-actions" aria-labelledby="client-actions-title" aria-describedby="client-actions-description">
+    <div class="dialog-heading">
+      <h2 id="client-actions-title">Eliminar cliente</h2>
+      <p class="dialog-caption" id="client-actions-name"></p>
+    </div>
+    <p id="client-actions-description">Se eliminarán la ficha del cliente y todas sus sesiones e intensidades.</p>
+    <p class="form-error" id="client-delete-error" role="alert" hidden></p>
+    <div class="dialog-actions">
+      <button class="button secondary" id="cancel-client-delete" type="button" autofocus>Cancelar</button>
+      <button class="button delete-client" id="confirm-client-delete" type="button">Eliminar</button>
+    </div>
   </dialog>
 
   <dialog class="ems-dialog" id="ems-dialog" aria-labelledby="ems-title">

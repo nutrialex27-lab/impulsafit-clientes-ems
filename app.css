@@ -183,6 +183,9 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
   min-height: 70px;
   font-size: .875rem;
   overflow-wrap: anywhere;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 .client-row:hover { background: #faf7fd; }
 .client-name {
@@ -195,6 +198,7 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
   font-weight: 700;
   text-align: left;
   overflow-wrap: anywhere;
+  touch-action: pan-y;
 }
 .client-name::after { content: ""; position: absolute; inset: 0; }
 .client-name:hover { text-decoration: underline; text-underline-offset: .16em; }
@@ -212,6 +216,11 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
 .state-pill[data-state="En pausa"] { background: #fbefda; color: #74520f; }
 .state-pill[data-state="Baja"] { background: #e8edf0; color: #46565f; }
 .edit-button { position: relative; z-index: 1; min-height: 39px; padding: 6px 8px; }
+.client-list-hint { padding: 0 17px 14px; color: var(--muted); font-size: .875rem; }
+.client-actions { width: min(430px, calc(100% - 28px)); }
+.client-actions > p { line-height: 1.5; }
+.delete-client { background: #892127; color: #fff; }
+.delete-client:hover { background: #701b20; }
 
 .empty { display: grid; justify-items: center; gap: 9px; padding: 61px 22px 64px; text-align: center; }
 .empty h2 { font-size: 1.2rem; letter-spacing: -.025em; }

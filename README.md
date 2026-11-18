@@ -2,6 +2,8 @@
 
 Aplicación web instalable de ImpulsaFit para gestionar fichas, sesiones e intensidades de EMS. Al crear una ficha se asignan un código, como `EMS-0001`, y la fecha de alta. Se puede buscar por nombre, móvil o código y filtrar por estado.
 
+Para eliminar un cliente, mantén pulsada su ficha y toca **Eliminar**. El aviso identifica al cliente e indica que también se borrarán todas sus sesiones e intensidades. **Cancelar** conserva sus datos. En ordenador también puedes usar el botón derecho o la tecla **Supr** sobre su nombre. El toque breve sigue abriendo sus intensidades y **Editar** mantiene su función independiente.
+
 Toca la ficha de un cliente para abrir **Intensidades EMS** y anotar el máster y los diez canales de Wiems PRO en mA. Cada sesión tiene fecha y permite registrar los valores por bloque. Los campos vacíos quedan sin registrar. Escribe `0` cuando quieras anotar 0 mA. Pulsa **Editar** para cambiar los datos del cliente.
 
 **Reset valores** vacía el máster y los canales del bloque seleccionado. Pulsa **Guardar sesión** para aplicar los cambios o **Cancelar** para descartarlos. Las sesiones sin valores no aparecen en el historial; si vacías todos los bloques de una sesión guardada y guardas el cambio, se retira del historial.

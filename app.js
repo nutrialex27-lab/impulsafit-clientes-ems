@@ -1,6 +1,7 @@
 import {
   clientCode,
   decodeBackup,
+  deleteClient,
   encodeBackup,
   goals,
   listClients,
@@ -22,6 +23,10 @@ const editor = byId("client-dialog");
 const form = byId("client-form");
 const saveButton = byId("save-client");
 const clientError = byId("client-error");
+const clientActions = byId("client-actions");
+const deleteConfirm = byId("confirm-client-delete");
+const deleteCancel = byId("cancel-client-delete");
+const deleteError = byId("client-delete-error");
 const backupDialog = byId("backups-dialog");
 const backupInput = byId("backup-file");
 const backupSummary = byId("backup-summary");
@@ -31,6 +36,8 @@ const installButton = byId("install-button");
 
 let clients = [];
 let editing = null;
+let deleting = null;
+let deleteTrigger = null;
 let pendingBackup = null;
 let installPrompt = null;
 
@@ -71,7 +78,8 @@ function rowFor(client) {
   open.type = "button";
   open.setAttribute("aria-label", "Ver intensidades EMS de " + client.name);
   open.setAttribute("aria-haspopup", "dialog");
-  open.addEventListener("click", () => openEmsPanel(client, refreshList));
+  open.setAttribute("aria-describedby", "client-list-hint");
+  bindClientActions(open, client);
   person.append(
     open,
     makeText("span", "client-code", clientCode(client.id)),
@@ -92,6 +100,81 @@ function rowFor(client) {
   return row;
 }
 
+function openClientActions(button, client) {
+  if (!button.isConnected || document.querySelector("dialog[open]")) return;
+  deleting = client;
+  deleteTrigger = button;
+  byId("client-actions-name").textContent = client.name + " · " + clientCode(client.id);
+  announce(deleteError);
+  clientActions.showModal();
+}
+
+function bindClientActions(button, client) {
+  let holdTimer;
+  let origin;
+  let held = false;
+  const stopHold = () => { clearTimeout(holdTimer); holdTimer = undefined; };
+  const showActions = () => {
+    stopHold();
+    held = true;
+    openClientActions(button, client);
+  };
+  button.addEventListener("pointerdown", (event) => {
+    stopHold();
+    held = false;
+    if (event.button !== 0 || event.isPrimary === false) return;
+    origin = { x: event.clientX, y: event.clientY };
+    holdTimer = setTimeout(showActions, 700);
+  });
+  button.addEventListener("pointermove", (event) => {
+    if (origin && Math.hypot(event.clientX - origin.x, event.clientY - origin.y) > 12) stopHold();
+  });
+  for (const name of ["pointerup", "pointercancel", "pointerleave"]) button.addEventListener(name, stopHold);
+  button.addEventListener("contextmenu", (event) => { event.preventDefault(); showActions(); });
+  button.addEventListener("keydown", (event) => {
+    if ((event.key === "F10" && event.shiftKey) || event.key === "ContextMenu" || event.key === "Delete") {
+      event.preventDefault();
+      showActions();
+    }
+  });
+  button.addEventListener("click", (event) => {
+    stopHold();
+    if (clientActions.open || (held && event.detail !== 0)) { event.preventDefault(); return; }
+    openEmsPanel(client, refreshList);
+  });
+}
+
+deleteCancel.addEventListener("click", () => clientActions.close());
+clientActions.addEventListener("cancel", (event) => {
+  if (deleteConfirm.disabled) event.preventDefault();
+});
+clientActions.addEventListener("close", () => {
+  deleting = null;
+  if (deleteTrigger?.isConnected) deleteTrigger.focus();
+  deleteTrigger = null;
+});
+deleteConfirm.addEventListener("click", async () => {
+  if (!deleting || deleteConfirm.disabled) return;
+  const previous = deleting;
+  deleteConfirm.disabled = true;
+  deleteCancel.disabled = true;
+  announce(deleteError);
+  try {
+    await deleteClient(previous);
+    clients = clients.filter((client) => client.id !== previous.id);
+    renderList();
+    clientActions.close();
+    await refreshList();
+    announce(feedback, "Ficha " + clientCode(previous.id) + " eliminada.");
+    creator.focus();
+  } catch (error) {
+    announce(deleteError, error.message || "No se ha podido eliminar el cliente.");
+  } finally {
+    deleteConfirm.disabled = false;
+    deleteCancel.disabled = false;
+  }
+});
+
 function renderList() {
   const query = normalize(search.value.trim());
   const visible = clients.filter((client) => matches(client, query));
@@ -100,6 +183,7 @@ function renderList() {
   byId("client-count").textContent = filtered ? visible.length + " de " + count : count;
   byId("directory-head").hidden = visible.length === 0;
   clientList.hidden = visible.length === 0;
+  byId("client-list-hint").hidden = visible.length === 0;
   clientList.replaceChildren(...visible.map(rowFor));
   byId("empty-state").hidden = visible.length > 0;
   byId("empty-title").textContent = filtered ? "No se encontraron fichas" : "Aún no hay clientes";
@@ -287,7 +371,7 @@ installButton.addEventListener("click", async () => {
 });
 
 if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("./sw.js?v=15", { updateViaCache: "none" }).catch((error) => {
+  navigator.serviceWorker.register("./sw.js?v=16", { updateViaCache: "none" }).catch((error) => {
     console.warn("No se pudo preparar el uso sin conexión.", error);
   });
 }

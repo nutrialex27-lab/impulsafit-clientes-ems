@@ -119,6 +119,28 @@ export function saveClient(values, previous) {
   });
 }
 
+export function deleteClient(previous) {
+  return transaction("readwrite", (store, setResult, abort) => {
+    const request = store.get(previous.id);
+    request.onsuccess = () => {
+      const current = request.result;
+      if (!current || current.revision !== previous.revision) {
+        abort(new Error("La ficha cambió desde que la abriste. Vuelve al listado y ábrela de nuevo antes de eliminar."));
+        return;
+      }
+      const sessions = current.emsSessions ?? [];
+      const before = previous.emsSessions ?? [];
+      if (sessions.length !== before.length || sessions.some((item, index) =>
+        item.id !== before[index].id || item.revision !== before[index].revision)) {
+        abort(new Error("Las sesiones del cliente cambiaron. Vuelve al listado y ábrelo de nuevo antes de eliminar."));
+        return;
+      }
+      store.delete(previous.id);
+      setResult(previous.id);
+    };
+  });
+}
+
 export function saveEmsSession(fields, client, previous) {
   const session = {
     ...readSession(fields, { allowEmpty: Boolean(previous) }),
