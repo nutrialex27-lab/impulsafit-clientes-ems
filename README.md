@@ -12,7 +12,7 @@ Para eliminar una sesión completa, mantén pulsada su fecha y toca **Eliminar**
 
 Elige el bloque y pulsa **Hacer foto** para abrir la cámara del móvil o **Elegir foto** para usar una imagen guardada. Revisa el recorte propuesto. Puedes arrastrar sobre la imagen para incluir los nombres de los diez canales, los números y el máster de una sola fila. **Foto completa** permite empezar de nuevo y **Ajustar los bordes del recorte** ofrece controles adicionales. Pulsa **Leer valores**. La foto queda visible junto a los campos durante la edición del bloque. Revisa los valores, completa los pendientes y pulsa **Guardar sesión**.
 
-Si en la foto aparecen varias filas de valores, selecciona la del cliente. Tesseract.js procesa la imagen en el dispositivo, en memoria. Abre la app con conexión la primera vez que uses el lector para descargar su motor y el modelo de texto.
+Si en la foto aparecen varias filas de valores, selecciona la del cliente. El máster se lee en el círculo azul junto a su foto, separando el número de la etiqueta pequeña mA. Tesseract.js procesa la imagen en el dispositivo, en memoria. Abre la app con conexión la primera vez que uses el lector para descargar su motor y el modelo de texto.
 
 ## Uso e instalación
 

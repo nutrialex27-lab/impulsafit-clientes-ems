@@ -157,6 +157,20 @@ export function readMilliampCrop(tsv, priorValue, digitsTsv) {
   return values.size === 1 ? values.values().next().value : undefined;
 }
 
+export function readMasterDigits(tsv) {
+  const words = wordsIn(tsv).sort((left, right) => left.x - right.x);
+  if (!words.length || words.some((word) => word.confidence < 55 || !/^\d+(?:[.,]\d+)?$/.test(word.text))) return undefined;
+  for (let index = 1; index < words.length; index++) {
+    const previous = words[index - 1];
+    const word = words[index];
+    const height = Math.max(previous.height, word.height);
+    const gap = word.x - word.width / 2 - previous.x - previous.width / 2;
+    if (Math.abs(word.y - previous.y) > .35 * height || gap < 0 || gap > .6 * height) return undefined;
+  }
+  const text = words.map((word) => word.text).join("");
+  return /^\d+(?:[.,]\d+)?$/.test(text) ? Number(text.replace(",", ".")) : undefined;
+}
+
 export function channelValues(readings) {
   return Object.fromEntries([...readings].flatMap(([rank, reading]) =>
     reading.confidence >= 50 ? [[channels[rank][0], reading.value]] : []
