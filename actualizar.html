@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#281b3a">
+  <title>Actualizar Registro EMS</title>
+  <style>
+    body { margin: 0; padding: 24px; font-family: Inter, system-ui, sans-serif; color: #281b3a; background: #f1eafa; }
+    main { max-width: 440px; margin: 12vh auto; padding: 28px; border-radius: 14px; background: white; }
+    h1 { font-size: 1.5rem; margin-top: 0; }
+    p { line-height: 1.5; }
+    button { padding: 12px 18px; border: 0; border-radius: 8px; font: inherit; color: white; background: #6535a8; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Actualizar Registro EMS</h1>
+    <p id="status" role="status">Preparando la nueva versión…</p>
+    <button id="retry" type="button" hidden>Reintentar</button>
+  </main>
+  <script type="module">
+    const status = document.getElementById("status");
+    const retry = document.getElementById("retry");
+
+    async function update() {
+      retry.hidden = true;
+      status.textContent = "Descargando la nueva versión. La app se abrirá al terminar…";
+      try {
+        if (!("serviceWorker" in navigator)) {
+          location.replace("./");
+          return;
+        }
+        const registration = await navigator.serviceWorker.register("./sw.js?v=13", { updateViaCache: "none" });
+        const worker = registration.installing ?? registration.waiting ?? registration.active;
+        if (!worker) throw new Error("No se pudo iniciar la actualización.");
+        await new Promise((resolve, reject) => {
+          const deadline = setTimeout(() => finish(new Error("La actualización está tardando demasiado.")), 45000);
+          function finish(failure) {
+            clearTimeout(deadline);
+            worker.removeEventListener("statechange", check);
+            if (failure) reject(failure);
+            else resolve();
+          }
+          function check() {
+            if (worker.state === "installed") worker.postMessage({ type: "ACTIVATE_UPDATE" });
+            if (worker.state === "activated") finish();
+            if (worker.state === "redundant") finish(new Error("No se pudo completar la actualización."));
+          }
+          worker.addEventListener("statechange", check);
+          check();
+        });
+        location.replace("./");
+      } catch {
+        status.textContent = "No se pudo actualizar. Comprueba la conexión y pulsa Reintentar.";
+        retry.hidden = false;
+      }
+    }
+
+    retry.addEventListener("click", () => { void update(); });
+    void update();
+  </script>
+</body>
+</html>

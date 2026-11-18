@@ -1,6 +1,6 @@
 const scope = new URL(self.registration.scope);
 const cachePrefix = "impulsafit-ems:" + scope.pathname + ":";
-const cacheName = cachePrefix + "v12";
+const cacheName = cachePrefix + "v13";
 const ocrCacheName = "impulsafit-ocr:6.0.1:" + scope.pathname;
 const home = new URL("index.html", scope).href;
 const manifest = new URL("manifest.webmanifest", scope).href;
@@ -43,6 +43,10 @@ self.addEventListener("activate", (event) => {
       .map((name) => caches.delete(name)));
     await self.clients.claim();
   })());
+});
+
+self.addEventListener("message", (event) => {
+  if (event.data?.type === "ACTIVATE_UPDATE") event.waitUntil(self.skipWaiting());
 });
 
 self.addEventListener("fetch", (event) => {
