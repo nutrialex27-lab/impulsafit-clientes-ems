@@ -40,7 +40,7 @@ function milliampValue(value, block, field) {
   return number;
 }
 
-export function readSession({ date, blocks: input }) {
+export function readSession({ date, blocks: input }, { allowEmpty = false } = {}) {
   if (!validDate(date)) throw new Error("Introduce una fecha de sesión válida.");
   const recorded = {};
   for (const [blockId, blockLabel] of blocks) {
@@ -53,7 +53,7 @@ export function readSession({ date, blocks: input }) {
     }
     if (Object.keys(values).length > 0) recorded[blockId] = values;
   }
-  if (Object.keys(recorded).length === 0) {
+  if (!allowEmpty && Object.keys(recorded).length === 0) {
     throw new Error("Anota al menos un valor de máster o de canal para guardar la sesión.");
   }
   return { date, blocks: recorded };

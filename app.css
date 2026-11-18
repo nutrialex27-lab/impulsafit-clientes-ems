@@ -374,6 +374,8 @@ textarea { display: block; resize: vertical; }
 }
 .ems-master .ems-field { max-width: 175px; }
 .ems-channels-heading { margin-bottom: 10px; }
+.ems-block-actions { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 16px; }
+.ems-delete-block { color: #892127; border-color: #c798a0; }
 .ems-channels {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

@@ -13,6 +13,8 @@ const blockPicker = byId("ems-block");
 const saveButton = byId("save-ems-session");
 const cancelButton = byId("cancel-ems-session");
 const newButton = byId("new-ems-session");
+const resetValues = byId("reset-ems-values");
+const deleteBlock = byId("delete-ems-block");
 const error = byId("ems-error");
 const feedback = byId("ems-feedback");
 const scanButton = byId("ems-scan-button");
@@ -42,6 +44,7 @@ let pendingScan;
 let cameraRequest;
 let photoJob;
 const referencePhotos = new Map();
+const scanVersions = new Map();
 
 function addInput(container, id, label) {
   const field = document.createElement("label");
@@ -55,6 +58,7 @@ function addInput(container, id, label) {
   input.type = "text";
   input.inputMode = "decimal";
   input.autocomplete = "off";
+  input.addEventListener("input", updateBlockActions);
   const unit = document.createElement("span");
   unit.textContent = "mA";
   control.append(input, unit);
@@ -90,7 +94,7 @@ function showOverview() {
     label.textContent = dateCounts.get(item.date) > 1 ? date + " · sesión " + number : date;
     const summary = document.createElement("span");
     const count = Object.keys(item.blocks).length;
-    summary.textContent = count + (count === 1 ? " bloque" : " bloques");
+    summary.textContent = count ? count + (count === 1 ? " bloque" : " bloques") : "Sin bloques";
     button.append(label, summary);
     button.addEventListener("click", () => editSession(item));
     row.append(button);
@@ -110,6 +114,13 @@ function showBlock() {
   photoReference.hidden = !reference;
   if (reference) referenceImage.src = reference;
   else referenceImage.removeAttribute("src");
+  updateBlockActions();
+}
+
+function updateBlockActions() {
+  const hasValues = [...inputs.values()].some((input) => input.value.trim() !== "");
+  resetValues.disabled = saveButton.disabled || (!hasValues && !referencePhotos.has(activeBlock));
+  deleteBlock.disabled = saveButton.disabled || (!draft?.[activeBlock] && !hasValues && !referencePhotos.has(activeBlock));
 }
 
 function rememberBlock() {
@@ -118,6 +129,7 @@ function rememberBlock() {
 
 function editSession(existing = null) {
   referencePhotos.clear();
+  scanVersions.clear();
   session = existing;
   draft = { ...existing?.blocks };
   dateInput.value = existing?.date ?? today();
@@ -159,8 +171,34 @@ blockPicker.addEventListener("change", () => {
 });
 
 function scanStillOpen(job) {
-  return dialog.open && !form.hidden && draft === job.draft;
+  return dialog.open && !form.hidden && draft === job.draft
+    && job.version === (scanVersions.get(job.block) ?? 0);
 }
+
+function clearBlock(remove) {
+  if (saveButton.disabled) return;
+  const block = activeBlock;
+  const label = blocks.find(([id]) => id === block)[1];
+  scanVersions.set(block, (scanVersions.get(block) ?? 0) + 1);
+  referencePhotos.delete(block);
+  scanRows.hidden = true;
+  pendingScan = undefined;
+  error.hidden = true;
+  if (remove) {
+    delete draft[block];
+    activeBlock = blocks.find(([id]) => Object.values(draft[id] ?? {}).some((value) => String(value ?? "").trim() !== ""))?.[0] ?? block;
+    blockPicker.value = activeBlock;
+  } else {
+    draft[block] = {};
+  }
+  showBlock();
+  scanStatus.textContent = remove
+    ? label + " eliminado de la sesión. Pulsa Guardar sesión para aplicar el cambio."
+    : "Valores de " + label + " vaciados. Pulsa Guardar sesión para aplicar el cambio.";
+}
+
+resetValues.addEventListener("click", () => clearBlock(false));
+deleteBlock.addEventListener("click", () => clearBlock(true));
 
 function fillFromScan(job, values) {
   if (!scanStillOpen(job)) return;
@@ -316,7 +354,7 @@ window.addEventListener("pagehide", closeCamera);
 
 function scanJob() {
   rememberBlock();
-  return { draft, block: activeBlock, before: { ...draft[activeBlock] } };
+  return { draft, block: activeBlock, before: { ...draft[activeBlock] }, version: scanVersions.get(activeBlock) ?? 0 };
 }
 
 async function runScan(job, read) {
@@ -403,6 +441,7 @@ form.addEventListener("submit", async (event) => {
   if (saveButton.disabled) return;
   saveButton.disabled = true;
   cancelButton.disabled = true;
+  updateBlockActions();
   error.hidden = true;
   rememberBlock();
   try {
@@ -417,5 +456,6 @@ form.addEventListener("submit", async (event) => {
   } finally {
     saveButton.disabled = false;
     cancelButton.disabled = false;
+    updateBlockActions();
   }
 });

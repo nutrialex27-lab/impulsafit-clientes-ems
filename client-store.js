@@ -121,7 +121,7 @@ export function saveClient(values, previous) {
 
 export function saveEmsSession(fields, client, previous) {
   const session = {
-    ...readSession(fields),
+    ...readSession(fields, { allowEmpty: Boolean(previous) }),
     id: previous?.id ?? crypto.randomUUID(),
     revision: crypto.randomUUID(),
   };
@@ -165,7 +165,7 @@ function decodeSessions(sessions) {
       throw new Error("La copia contiene sesiones EMS inválidas o repetidas.");
     }
     ids.add(session.id);
-    return { ...readSession(session), id: session.id };
+    return { ...readSession(session, { allowEmpty: true }), id: session.id };
   });
 }
 
