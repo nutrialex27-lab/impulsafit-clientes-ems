@@ -22,8 +22,23 @@ function wordsIn(tsv) {
 
 function readingsIn(words, minConfidence = 20) {
   const units = words.filter((word) => /^MM?A$/.test(normalized(word.text)));
-  return words.flatMap((word) => {
-    const match = /^(\d+(?:[.,]\d+)?)(?:\s*(m{1,2}a)[.,]?)?$/i.exec(word.text);
+  return words.flatMap((original) => {
+    let word = original;
+    const prefixes = words.filter((other) => {
+      const height = Math.max(word.height, other.height);
+      const gap = word.x - word.width / 2 - other.x - other.width / 2;
+      return /^\d+$/.test(other.text) && gap >= 0 && gap < .5 * height
+        && Math.abs(other.y - word.y) < .3 * height;
+    });
+    if (/^\d/.test(word.text) && prefixes.length === 1) {
+      const prefix = prefixes[0];
+      const left = prefix.x - prefix.width / 2;
+      const right = word.x + word.width / 2;
+      word = { ...word, text: prefix.text + word.text, x: (left + right) / 2,
+        width: right - left, confidence: Math.min(prefix.confidence, word.confidence) };
+    }
+    const text = word.text.replace(/^[(["'“]+|[)\]"'”]+$/g, "");
+    const match = /^(\d+(?:[.,]\d+)?)(?:\s*(m{1,2}a)[.,]?)?$/i.exec(text);
     if (!match || word.confidence < minConfidence) return [];
     const hasUnit = match[2] || units.some((unit) => {
       const dx = unit.x - word.x;
@@ -91,7 +106,12 @@ export function scanWiemsScreen(tsv, width) {
 
   const { x, y, step, tilt } = layout;
   const readings = readingsIn(words);
-  const flattened = readings.map((reading) => ({
+  const digits = words.filter((word) => /^\d+(?:[.,]\d+)?$/.test(word.text)
+    && word.confidence >= 70 && word.height >= .10 * step && word.height <= .40 * step
+    && !readings.some((reading) => Math.abs(reading.x - word.x) < .2 * step
+      && Math.abs(reading.y - word.y) < .2 * step))
+    .map((word) => ({ ...word, value: Number(word.text.replace(",", ".")) }));
+  const flattened = [...readings, ...digits].map((reading) => ({
     ...reading, column: (reading.x - x) / step, level: reading.y - tilt * (reading.x - x),
   }));
   const channelReadings = flattened.filter((reading) =>
@@ -133,6 +153,7 @@ export function readMilliampCrop(tsv, priorValue, digitsTsv) {
   const confirmed = readings.filter((entry) => entry.confidence >= 50
     || (entry.value === priorValue && entry.confidence >= 28) || entry.value === digit);
   const values = new Set(confirmed.map(({ value }) => value));
+  if (!values.size && digit !== undefined && digit === priorValue) return digit;
   return values.size === 1 ? values.values().next().value : undefined;
 }
 

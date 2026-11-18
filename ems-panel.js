@@ -1,6 +1,7 @@
 import { clientCode, saveEmsSession, today } from "./client-store.js";
 import { blocks, channels } from "./ems-sessions.js";
-import { readWiemsFrame } from "./ems-ocr.js";
+import { readWiemsFrame, readWiemsImage } from "./ems-ocr.js";
+import { cropEmsPhoto } from "./ems-photo.js";
 
 const byId = (id) => document.getElementById(id);
 const dialog = byId("ems-dialog");
@@ -15,6 +16,10 @@ const newButton = byId("new-ems-session");
 const error = byId("ems-error");
 const feedback = byId("ems-feedback");
 const scanButton = byId("ems-scan-button");
+const takePhoto = byId("ems-take-photo");
+const choosePhoto = byId("ems-choose-photo");
+const photoReference = byId("ems-photo-reference");
+const referenceImage = byId("ems-photo-reference-image");
 const scanStatus = byId("ems-scan-status");
 const scanRows = byId("ems-scan-rows");
 const scanRow = byId("ems-scan-row");
@@ -35,6 +40,8 @@ let draft;
 let activeBlock;
 let pendingScan;
 let cameraRequest;
+let photoJob;
+const referencePhotos = new Map();
 
 function addInput(container, id, label) {
   const field = document.createElement("label");
@@ -61,6 +68,9 @@ addInput(byId("ems-master-field"), "master", "Máster del bloque");
 for (const [id, label] of channels) addInput(byId("ems-channels"), id, label);
 
 function showOverview() {
+  referencePhotos.clear();
+  referenceImage.removeAttribute("src");
+  photoReference.hidden = true;
   const sessions = client.emsSessions ?? [];
   const dateCounts = new Map();
   const entries = sessions.map((item) => {
@@ -96,6 +106,10 @@ function showBlock() {
     const value = draft[activeBlock]?.[key];
     input.value = typeof value === "number" ? String(value).replace(".", ",") : value ?? "";
   }
+  const reference = referencePhotos.get(activeBlock);
+  photoReference.hidden = !reference;
+  if (reference) referenceImage.src = reference;
+  else referenceImage.removeAttribute("src");
 }
 
 function rememberBlock() {
@@ -103,6 +117,7 @@ function rememberBlock() {
 }
 
 function editSession(existing = null) {
+  referencePhotos.clear();
   session = existing;
   draft = { ...existing?.blocks };
   dateInput.value = existing?.date ?? today();
@@ -299,22 +314,26 @@ cameraDialog.addEventListener("cancel", (event) => {
 });
 window.addEventListener("pagehide", closeCamera);
 
-cameraRead.addEventListener("click", async () => {
-  if (cameraRead.disabled || form.hidden) return;
+function scanJob() {
   rememberBlock();
-  const job = { draft, block: activeBlock, before: { ...draft[activeBlock] } };
+  return { draft, block: activeBlock, before: { ...draft[activeBlock] } };
+}
+
+async function runScan(job, read) {
   scanButton.disabled = true;
+  takePhoto.disabled = true;
+  choosePhoto.disabled = true;
   scanStatus.textContent = "Leyendo intensidades…";
   scanRows.hidden = true;
   pendingScan = undefined;
   try {
-    // Copia el fotograma antes de cerrar la cámara.
-    const reading = readWiemsFrame(cameraVideo);
+    // El fotograma de vídeo se copia antes de cerrar la cámara.
+    const reading = read();
     closeCamera();
     const rows = await reading;
     if (!scanStillOpen(job)) return;
     if (!rows.some((values) => Object.keys(values).length)) {
-      scanStatus.textContent = "Vuelve a escanear de frente, con los canales y el máster visibles y sin reflejos.";
+      scanStatus.textContent = "No se han podido leer los valores. Ajusta el recorte para incluir los nombres de los canales, los números y el máster. También puedes completarlos a mano.";
       return;
     }
     if (rows.length === 1) {
@@ -333,12 +352,45 @@ cameraRead.addEventListener("click", async () => {
     scanStatus.textContent = "Se han detectado varias filas de valores.";
   } catch {
     if (scanStillOpen(job)) {
-      scanStatus.textContent = "No se pudo completar la lectura. Abre la app con conexión y vuelve a escanear.";
+      scanStatus.textContent = "No se pudo completar la lectura. Comprueba la conexión para iniciar el lector o completa los valores a mano.";
     }
   } finally {
     scanButton.disabled = false;
+    takePhoto.disabled = false;
+    choosePhoto.disabled = false;
   }
+}
+
+cameraRead.addEventListener("click", () => {
+  if (cameraRead.disabled || form.hidden) return;
+  const job = scanJob();
+  referencePhotos.delete(job.block);
+  showBlock();
+  void runScan(job, () => readWiemsFrame(cameraVideo));
 });
+
+for (const [button, input] of [[takePhoto, byId("ems-camera-file")], [choosePhoto, byId("ems-photo-file")]]) {
+  button.addEventListener("click", () => {
+    photoJob = scanJob();
+    input.value = "";
+    input.click();
+  });
+  input.addEventListener("change", async () => {
+    const file = input.files?.[0];
+    const job = photoJob;
+    photoJob = undefined;
+    if (!file || !job || !scanStillOpen(job)) return;
+    try {
+      const image = await cropEmsPhoto(file);
+      if (!image || !scanStillOpen(job)) return;
+      referencePhotos.set(job.block, image.toDataURL("image/jpeg", .88));
+      if (activeBlock === job.block) { rememberBlock(); showBlock(); }
+      await runScan(job, () => readWiemsImage(image));
+    } catch (failure) {
+      if (scanStillOpen(job)) scanStatus.textContent = failure.message;
+    }
+  });
+}
 
 scanRow.addEventListener("change", () => {
   if (pendingScan && scanRow.value !== "") {

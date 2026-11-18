@@ -1,5 +1,5 @@
 import { channels } from "./ems-sessions.js";
-import { channelValues, readMilliampCrop, scanWiemsScreen } from "./wiems-values.js";
+import { readMilliampCrop, scanWiemsScreen } from "./wiems-values.js";
 
 const base = new URL("./", import.meta.url);
 let scriptReady;
@@ -57,11 +57,11 @@ function detailCanvas(frame, degrees = 0) {
 
 function valueCrop(frame, layout, row, rank, master = false) {
   const { x, step, tilt } = layout;
-  const center = x + (rank + (master ? .03 : 0)) * step;
+  const center = x + (rank + .12) * step;
   const y = row.y + tilt * (center - x);
-  const width = (master ? .55 : .86) * step;
-  const height = (master ? .55 : .37) * step;
-  const top = y + (master ? .02 * step : -.185 * step);
+  const width = (master ? .70 : .90) * step;
+  const height = (master ? .65 : .46) * step;
+  const top = y + (master ? -.04 * step : -.23 * step);
   const crop = document.createElement("canvas");
   const scale = Math.max(2, 164 / width);
   crop.width = Math.round(width * scale);
@@ -72,14 +72,14 @@ function valueCrop(frame, layout, row, rank, master = false) {
   context.fillRect(0, 0, crop.width, crop.height);
   context.setTransform(scale, -scale * tilt, 0, scale,
     scale * (width / 2 - center), scale * (tilt * center - top));
-  context.filter = "grayscale(1) contrast(1.25)";
+  context.filter = master ? "grayscale(1) invert(1) contrast(1.25)" : "grayscale(1) contrast(1.25)";
   context.drawImage(frame, 0, 0);
   return crop;
 }
 
 function digitsCrop(tile) {
   const crop = document.createElement("canvas");
-  crop.width = Math.round(tile.width * .46);
+  crop.width = Math.round(tile.width * .42);
   crop.height = tile.height;
   crop.getContext("2d").drawImage(tile, 0, 0);
   return crop;
@@ -108,8 +108,11 @@ function startWorker(engine) {
   });
 }
 
-export async function readWiemsFrame(video) {
-  const original = frameCanvas(video);
+export function readWiemsFrame(video) {
+  return readWiemsImage(frameCanvas(video));
+}
+
+export async function readWiemsImage(original) {
   const engine = await loadEngine();
   const worker = await startWorker(engine);
   try {
@@ -147,26 +150,31 @@ export async function readWiemsFrame(video) {
     const results = [];
 
     for (const row of rows) {
-      const values = Math.abs(layout.tilt) < .04 ? channelValues(row.reads) : {};
+      const values = {};
       await worker.setParameters({
-        tessedit_pageseg_mode: engine.PSM.SINGLE_LINE,
-        tessedit_char_whitelist: "0123456789.,mMaA",
+        tessedit_pageseg_mode: engine.PSM.SPARSE_TEXT,
+        tessedit_char_whitelist: "0123456789.,mMaA ",
       });
       for (const [rank, [id]] of channels.entries()) {
-        if (values[id] !== undefined) continue;
         const tile = valueCrop(frame, layout, row, rank);
         const result = await worker.recognize(tile, {}, { tsv: true });
         const prior = row.reads.get(rank)?.value;
         let value = readMilliampCrop(result.data.tsv, prior);
         if (value === undefined) {
-          const digits = await worker.recognize(digitsCrop(tile), {}, { tsv: true });
-          value = readMilliampCrop(result.data.tsv, prior, digits.data.tsv);
+          await worker.setParameters({ tessedit_pageseg_mode: engine.PSM.SINGLE_LINE });
+          const line = await worker.recognize(tile, {}, { tsv: true });
+          value = readMilliampCrop(line.data.tsv, prior);
+          if (value === undefined) {
+            const digits = await worker.recognize(digitsCrop(tile), {}, { tsv: true });
+            value = readMilliampCrop(line.data.tsv, prior, digits.data.tsv);
+          }
+          await worker.setParameters({ tessedit_pageseg_mode: engine.PSM.SPARSE_TEXT });
         }
         if (value !== undefined) values[id] = value;
       }
       let master = row.master;
       if (master === undefined) {
-        await worker.setParameters({ tessedit_pageseg_mode: engine.PSM.SINGLE_BLOCK });
+        await worker.setParameters({ tessedit_pageseg_mode: engine.PSM.SPARSE_TEXT, tessedit_char_whitelist: "" });
         const tile = valueCrop(frame, layout, row, channels.length, true);
         const result = await worker.recognize(tile, {}, { tsv: true });
         master = readMilliampCrop(result.data.tsv);

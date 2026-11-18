@@ -4,7 +4,9 @@ Aplicación web instalable de ImpulsaFit para gestionar fichas, sesiones e inten
 
 Toca la ficha de un cliente para abrir **Intensidades EMS** y anotar el máster y los diez canales de Wiems PRO en mA. Cada sesión tiene fecha y permite registrar los valores por bloque. Los campos vacíos quedan sin registrar. Escribe `0` cuando quieras anotar 0 mA. Pulsa **Editar** para cambiar los datos del cliente.
 
-Elige el bloque y pulsa **Escanear con cámara**. Permite el acceso a la cámara y encuadra los canales con sus valores en mA y el máster de Wiems PRO. Pulsa **Leer intensidades**. Si aparecen varias filas, selecciona la del cliente. Revisa los valores antes de pulsar **Guardar sesión**. El lector de Tesseract.js procesa el fotograma en el dispositivo, en memoria. Abre la app con conexión la primera vez que uses el lector para descargar su motor y el modelo de texto.
+Elige el bloque y pulsa **Hacer foto** para abrir la cámara del móvil o **Elegir foto** para usar una imagen guardada. Revisa el recorte propuesto. Puedes arrastrar sobre la imagen para incluir los nombres de los diez canales, los números y el máster de una sola fila. **Foto completa** permite empezar de nuevo y **Ajustar los bordes del recorte** ofrece controles adicionales. Pulsa **Leer valores**. La foto queda visible junto a los campos durante la edición del bloque. Revisa los valores, completa los pendientes y pulsa **Guardar sesión**.
+
+También puedes usar **Cámara en directo**, encuadrar los canales y el máster y pulsar **Leer intensidades**. Si aparecen varias filas, selecciona la del cliente. Tesseract.js procesa la imagen en el dispositivo, en memoria. Abre la app con conexión la primera vez que uses el lector para descargar su motor y el modelo de texto.
 
 ## Uso e instalación
 
@@ -20,6 +22,7 @@ Sirve la raíz del repositorio con un servidor local. Por ejemplo, ejecuta `pyth
 - `client-store.js` contiene la validación y el almacenamiento en IndexedDB. Cada ficha conserva sus sesiones en `emsSessions`.
 - `ems-panel.js` controla el historial y el formulario de intensidades. `ems-sessions.js` define los bloques, los canales y su validación.
 - `ems-ocr.js` y `wiems-values.js` leen el fotograma de la cámara y alinean los números con los canales de Wiems PRO. Consulta `OCR-LICENSE.txt` para las versiones y licencias del motor.
+- `ems-photo.js` prepara la foto y permite ajustar el recorte antes de leerla.
 - `manifest.webmanifest` y `sw.js` habilitan la instalación y el acceso sin conexión. Actualiza la versión de caché en `sw.js` al publicar cambios de la app.
 
 Sube al repositorio el código de la app. Conserva tus copias de clientes fuera del repositorio.
