@@ -336,6 +336,14 @@ textarea { display: block; resize: vertical; }
   border-radius: 9px;
   background: var(--ink);
 }
+.ems-camera-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  column-gap: 10px;
+}
+.ems-camera-controls > * { margin-top: 8px; }
+.ems-camera-controls .ems-field { flex: 1 1 180px; }
 .ems-master {
   background: var(--accent-soft);
   border: 1px solid var(--line);

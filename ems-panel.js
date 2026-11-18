@@ -22,6 +22,10 @@ const cameraDialog = byId("ems-camera-dialog");
 const cameraVideo = byId("ems-camera-video");
 const cameraStatus = byId("ems-camera-status");
 const cameraRead = byId("ems-camera-read");
+const cameraFocus = byId("ems-camera-focus");
+const cameraPicker = byId("ems-camera-picker");
+const cameraDevice = byId("ems-camera-device");
+const focusHint = "Separa un poco el móvil hasta que los números se vean nítidos.";
 
 const inputs = new Map();
 let client;
@@ -166,6 +170,7 @@ function stopStream(stream) {
 function stopCamera() {
   cameraRequest = undefined;
   cameraRead.disabled = true;
+  cameraFocus.hidden = true;
   const stream = cameraVideo.srcObject;
   cameraVideo.srcObject = null;
   stopStream(stream);
@@ -173,6 +178,7 @@ function stopCamera() {
 
 function closeCamera() {
   stopCamera();
+  cameraPicker.hidden = true;
   if (cameraDialog.open) cameraDialog.close();
 }
 
@@ -180,37 +186,80 @@ function cameraIsOpen(request) {
   return cameraDialog.open && cameraRequest === request;
 }
 
-scanButton.addEventListener("click", async () => {
+async function adjustFocus(request, mode, aimAtCenter = false) {
+  const { track, canTarget } = request;
+  const advanced = [{ focusMode: mode }];
+  if (aimAtCenter && canTarget) advanced.push({ pointsOfInterest: [{ x: .5, y: .5 }] });
+  cameraStatus.textContent = "Ajustando el enfoque…";
+  try {
+    await track.applyConstraints({ ...track.getConstraints(), advanced });
+    // Give the lens time to settle before allowing a frame to be read.
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    return "";
+  } catch {
+    return focusHint;
+  }
+}
+
+async function updateCameraPicker(request) {
+  const activeId = request.track.getSettings?.().deviceId;
+  if (!activeId || !navigator.mediaDevices.enumerateDevices) return;
+  const devices = await navigator.mediaDevices.enumerateDevices().catch(() => []);
+  if (!cameraIsOpen(request)) return;
+  const cameras = devices.filter((device) => device.kind === "videoinput" && device.deviceId);
+  if (cameras.length < 2 || !cameras.some((camera) => camera.deviceId === activeId)) return;
+  cameraDevice.replaceChildren(...cameras.map((camera, index) =>
+    new Option(camera.label || "Cámara " + (index + 1), camera.deviceId)));
+  cameraDevice.value = activeId;
+  cameraPicker.hidden = false;
+}
+
+async function startCamera(deviceId) {
+  stopCamera();
   const request = {};
   cameraRequest = request;
+  cameraDevice.disabled = true;
   cameraStatus.textContent = "Abriendo la cámara…";
-  cameraDialog.showModal();
-  if (!navigator.mediaDevices?.getUserMedia) {
-    cameraStatus.textContent = "Abre la app en un navegador con acceso a la cámara.";
-    return;
-  }
   try {
+    const source = deviceId ? { deviceId: { exact: deviceId } } : { facingMode: { ideal: "environment" } };
     const stream = await navigator.mediaDevices.getUserMedia({
       audio: false,
-      video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+      video: { ...source, width: { ideal: 1920 }, height: { ideal: 1080 } },
     });
     if (!cameraIsOpen(request)) {
       stopStream(stream);
       return;
     }
     cameraVideo.srcObject = stream;
-    stream.getVideoTracks()[0]?.addEventListener("ended", () => {
+    const [track] = stream.getVideoTracks();
+    request.track = track;
+    track.addEventListener("ended", () => {
       if (!cameraIsOpen(request)) return;
       stopCamera();
+      cameraDevice.disabled = false;
       cameraStatus.textContent = "La cámara se ha desconectado. Cierra y vuelve a abrir el escáner.";
     }, { once: true });
     await cameraVideo.play();
     if (!cameraIsOpen(request)) return;
+
+    const modes = track.getCapabilities?.().focusMode ?? [];
+    const continuous = modes.includes("continuous");
+    const singleShot = modes.includes("single-shot");
+    request.canTarget = navigator.mediaDevices.getSupportedConstraints?.().pointsOfInterest;
+    request.refocusMode = singleShot ? "single-shot" : continuous && request.canTarget ? "continuous" : null;
+    const mode = continuous ? "continuous" : request.refocusMode;
+    const message = mode ? await adjustFocus(request, mode, !continuous) : focusHint;
+    if (!cameraIsOpen(request)) return;
     cameraRead.disabled = false;
-    cameraStatus.textContent = "";
+    cameraFocus.hidden = !request.refocusMode;
+    cameraFocus.disabled = false;
+    cameraStatus.textContent = message;
+    cameraDevice.disabled = false;
+    void updateCameraPicker(request);
   } catch (failure) {
     if (!cameraIsOpen(request)) return;
     stopCamera();
+    cameraDevice.disabled = false;
     if (failure.name === "NotAllowedError") {
       cameraStatus.textContent = "Permite el acceso a la cámara en los ajustes del sitio y vuelve a abrir el escáner.";
     } else if (failure.name === "NotFoundError") {
@@ -219,6 +268,28 @@ scanButton.addEventListener("click", async () => {
       cameraStatus.textContent = "No se pudo abrir la cámara. Cierra otras apps que la estén usando e inténtalo de nuevo.";
     }
   }
+}
+
+scanButton.addEventListener("click", () => {
+  cameraDialog.showModal();
+  if (!navigator.mediaDevices?.getUserMedia) {
+    cameraStatus.textContent = "Abre la app en un navegador con acceso a la cámara.";
+    return;
+  }
+  void startCamera();
+});
+
+cameraDevice.addEventListener("change", () => { void startCamera(cameraDevice.value); });
+cameraFocus.addEventListener("click", async () => {
+  const request = cameraRequest;
+  if (!request?.refocusMode || cameraRead.disabled) return;
+  cameraRead.disabled = true;
+  cameraFocus.disabled = true;
+  const message = await adjustFocus(request, request.refocusMode, true);
+  if (!cameraIsOpen(request)) return;
+  cameraRead.disabled = false;
+  cameraFocus.disabled = false;
+  cameraStatus.textContent = message;
 });
 
 byId("ems-camera-close").addEventListener("click", closeCamera);
