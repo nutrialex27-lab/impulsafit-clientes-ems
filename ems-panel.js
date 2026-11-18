@@ -1,4 +1,4 @@
-import { clientCode, saveEmsSession, today } from "./client-store.js";
+import { clientCode, deleteEmsSession, saveEmsSession, today } from "./client-store.js";
 import { blocks, channels } from "./ems-sessions.js";
 import { readWiemsFrame, readWiemsImage } from "./ems-ocr.js";
 import { cropEmsPhoto } from "./ems-photo.js";
@@ -14,7 +14,10 @@ const saveButton = byId("save-ems-session");
 const cancelButton = byId("cancel-ems-session");
 const newButton = byId("new-ems-session");
 const resetValues = byId("reset-ems-values");
-const deleteBlock = byId("delete-ems-block");
+const sessionActions = byId("ems-session-actions");
+const deleteConfirm = byId("confirm-ems-delete");
+const deleteCancel = byId("cancel-ems-delete");
+const deleteError = byId("ems-delete-error");
 const error = byId("ems-error");
 const feedback = byId("ems-feedback");
 const scanButton = byId("ems-scan-button");
@@ -43,6 +46,8 @@ let activeBlock;
 let pendingScan;
 let cameraRequest;
 let photoJob;
+let deleteTarget;
+let deleteTrigger;
 const referencePhotos = new Map();
 const scanVersions = new Map();
 
@@ -75,7 +80,7 @@ function showOverview() {
   referencePhotos.clear();
   referenceImage.removeAttribute("src");
   photoReference.hidden = true;
-  const sessions = client.emsSessions ?? [];
+  const sessions = (client.emsSessions ?? []).filter((item) => Object.keys(item.blocks).length > 0);
   const dateCounts = new Map();
   const entries = sessions.map((item) => {
     const number = (dateCounts.get(item.date) ?? 0) + 1;
@@ -94,16 +99,93 @@ function showOverview() {
     label.textContent = dateCounts.get(item.date) > 1 ? date + " · sesión " + number : date;
     const summary = document.createElement("span");
     const count = Object.keys(item.blocks).length;
-    summary.textContent = count ? count + (count === 1 ? " bloque" : " bloques") : "Sin bloques";
+    summary.textContent = count + (count === 1 ? " bloque" : " bloques");
     button.append(label, summary);
-    button.addEventListener("click", () => editSession(item));
+    bindSessionActions(button, item, label.textContent);
     row.append(button);
     history.append(row);
   }
   byId("ems-empty").hidden = sessions.length > 0;
+  byId("ems-history-hint").hidden = sessions.length === 0;
   form.hidden = true;
   overview.hidden = false;
 }
+
+function openSessionActions(item, button, label) {
+  if (!dialog.open || overview.hidden || !button.isConnected || sessionActions.open) return;
+  deleteTarget = item;
+  deleteTrigger = button;
+  byId("ems-session-actions-date").textContent = label;
+  deleteError.hidden = true;
+  sessionActions.showModal();
+}
+
+function bindSessionActions(button, item, label) {
+  let holdTimer;
+  let origin;
+  let held = false;
+  const stopHold = () => { clearTimeout(holdTimer); holdTimer = undefined; };
+  const showActions = () => {
+    stopHold();
+    held = true;
+    openSessionActions(item, button, label);
+  };
+  button.setAttribute("aria-haspopup", "dialog");
+  button.setAttribute("aria-describedby", "ems-history-hint");
+  button.addEventListener("pointerdown", (event) => {
+    stopHold();
+    held = false;
+    if (event.button !== 0 || event.isPrimary === false) return;
+    origin = { x: event.clientX, y: event.clientY };
+    holdTimer = setTimeout(showActions, 700);
+  });
+  button.addEventListener("pointermove", (event) => {
+    if (origin && Math.hypot(event.clientX - origin.x, event.clientY - origin.y) > 12) stopHold();
+  });
+  for (const name of ["pointerup", "pointercancel", "pointerleave"]) button.addEventListener(name, stopHold);
+  button.addEventListener("contextmenu", (event) => { event.preventDefault(); showActions(); });
+  button.addEventListener("keydown", (event) => {
+    if ((event.key === "F10" && event.shiftKey) || event.key === "ContextMenu" || event.key === "Delete") {
+      event.preventDefault();
+      showActions();
+    }
+  });
+  button.addEventListener("click", (event) => {
+    stopHold();
+    if (sessionActions.open || (held && event.detail !== 0)) { event.preventDefault(); return; }
+    editSession(item);
+  });
+}
+
+deleteCancel.addEventListener("click", () => sessionActions.close());
+sessionActions.addEventListener("cancel", (event) => {
+  if (deleteConfirm.disabled) event.preventDefault();
+});
+sessionActions.addEventListener("close", () => {
+  deleteTarget = undefined;
+  if (deleteTrigger?.isConnected) deleteTrigger.focus();
+  deleteTrigger = undefined;
+});
+deleteConfirm.addEventListener("click", async () => {
+  if (!deleteTarget || deleteConfirm.disabled) return;
+  deleteConfirm.disabled = true;
+  deleteCancel.disabled = true;
+  deleteError.hidden = true;
+  try {
+    client = await deleteEmsSession(client, deleteTarget);
+    onSave(client);
+    showOverview();
+    sessionActions.close();
+    feedback.textContent = "Sesión eliminada.";
+    newButton.focus();
+  } catch (failure) {
+    deleteError.textContent = failure.message || "No se ha podido eliminar la sesión.";
+    deleteError.hidden = false;
+  } finally {
+    deleteConfirm.disabled = false;
+    deleteCancel.disabled = false;
+  }
+});
 
 function showBlock() {
   for (const [key, input] of inputs) {
@@ -120,7 +202,6 @@ function showBlock() {
 function updateBlockActions() {
   const hasValues = [...inputs.values()].some((input) => input.value.trim() !== "");
   resetValues.disabled = saveButton.disabled || (!hasValues && !referencePhotos.has(activeBlock));
-  deleteBlock.disabled = saveButton.disabled || (!draft?.[activeBlock] && !hasValues && !referencePhotos.has(activeBlock));
 }
 
 function rememberBlock() {
@@ -175,7 +256,7 @@ function scanStillOpen(job) {
     && job.version === (scanVersions.get(job.block) ?? 0);
 }
 
-function clearBlock(remove) {
+function clearBlock() {
   if (saveButton.disabled) return;
   const block = activeBlock;
   const label = blocks.find(([id]) => id === block)[1];
@@ -184,21 +265,12 @@ function clearBlock(remove) {
   scanRows.hidden = true;
   pendingScan = undefined;
   error.hidden = true;
-  if (remove) {
-    delete draft[block];
-    activeBlock = blocks.find(([id]) => Object.values(draft[id] ?? {}).some((value) => String(value ?? "").trim() !== ""))?.[0] ?? block;
-    blockPicker.value = activeBlock;
-  } else {
-    draft[block] = {};
-  }
+  draft[block] = {};
   showBlock();
-  scanStatus.textContent = remove
-    ? label + " eliminado de la sesión. Pulsa Guardar sesión para aplicar el cambio."
-    : "Valores de " + label + " vaciados. Pulsa Guardar sesión para aplicar el cambio.";
+  scanStatus.textContent = "Valores de " + label + " vaciados. Pulsa Guardar sesión para aplicar el cambio.";
 }
 
-resetValues.addEventListener("click", () => clearBlock(false));
-deleteBlock.addEventListener("click", () => clearBlock(true));
+resetValues.addEventListener("click", clearBlock);
 
 function fillFromScan(job, values) {
   if (!scanStillOpen(job)) return;

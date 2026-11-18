@@ -115,6 +115,7 @@
       </div>
       <p class="ems-empty" id="ems-empty">Aún no hay sesiones de intensidades.</p>
       <ul class="ems-history" id="ems-history"></ul>
+      <p class="ems-history-hint" id="ems-history-hint" hidden>Mantén pulsada una fecha para eliminar la sesión.</p>
       <p class="feedback" id="ems-feedback" role="status"></p>
       <div class="dialog-actions">
         <button class="button secondary" id="close-ems" type="button">Volver a clientes</button>
@@ -156,7 +157,6 @@
       <div class="ems-channels" id="ems-channels"></div>
       <div class="ems-block-actions" role="group" aria-label="Acciones del bloque seleccionado">
         <button class="button secondary" id="reset-ems-values" type="button" disabled>Reset valores</button>
-        <button class="button secondary ems-delete-block" id="delete-ems-block" type="button" disabled>Borrar bloque</button>
       </div>
       <p class="form-error" id="ems-error" role="alert" hidden></p>
       <div class="dialog-actions">
@@ -164,6 +164,19 @@
         <button class="button primary" id="save-ems-session" type="submit">Guardar sesión</button>
       </div>
     </form>
+  </dialog>
+
+  <dialog class="ems-session-actions" id="ems-session-actions" aria-labelledby="ems-session-actions-title" aria-describedby="ems-session-actions-description">
+    <div class="dialog-heading">
+      <h2 id="ems-session-actions-title">Eliminar sesión</h2>
+      <p class="dialog-caption" id="ems-session-actions-date"></p>
+    </div>
+    <p id="ems-session-actions-description">Se eliminarán los valores de todos los bloques de esta sesión.</p>
+    <p class="form-error" id="ems-delete-error" role="alert" hidden></p>
+    <div class="dialog-actions">
+      <button class="button secondary" id="cancel-ems-delete" type="button" autofocus>Cancelar</button>
+      <button class="button ems-delete-session" id="confirm-ems-delete" type="button">Eliminar</button>
+    </div>
   </dialog>
 
   <dialog class="ems-camera-dialog" id="ems-camera-dialog" aria-labelledby="ems-camera-title" aria-describedby="ems-camera-guide">

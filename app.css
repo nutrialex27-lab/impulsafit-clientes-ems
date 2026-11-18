@@ -305,9 +305,18 @@ textarea { display: block; resize: vertical; }
   border-radius: 8px;
   background: var(--surface);
   color: var(--ink);
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: pan-y;
 }
 .ems-history-item:hover { background: var(--accent-soft); }
 .ems-history-item span { color: var(--muted); font-size: .82rem; white-space: nowrap; }
+.ems-history-hint { margin-top: 10px; color: var(--muted); font-size: .875rem; }
+.ems-session-actions { width: min(430px, calc(100% - 28px)); }
+.ems-session-actions > p { line-height: 1.5; }
+.ems-delete-session { background: #892127; color: #fff; }
+.ems-delete-session:hover { background: #701b20; }
 .ems-controls {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -375,7 +384,6 @@ textarea { display: block; resize: vertical; }
 .ems-master .ems-field { max-width: 175px; }
 .ems-channels-heading { margin-bottom: 10px; }
 .ems-block-actions { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 16px; }
-.ems-delete-block { color: #892127; border-color: #c798a0; }
 .ems-channels {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

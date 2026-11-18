@@ -140,9 +140,32 @@ export function saveEmsSession(fields, client, previous) {
         return;
       }
       const updated = [...sessions];
-      if (previous) updated[index] = session;
+      if (previous && Object.keys(session.blocks).length === 0) updated.splice(index, 1);
+      else if (previous) updated[index] = session;
       else updated.push(session);
       const record = { ...current, emsSessions: updated };
+      store.put(record);
+      setResult(record);
+    };
+  });
+}
+
+export function deleteEmsSession(client, session) {
+  return transaction("readwrite", (store, setResult, abort) => {
+    const request = store.get(client.id);
+    request.onsuccess = () => {
+      const current = request.result;
+      if (!current || current.revision !== client.revision) {
+        abort(new Error("La ficha cambió desde que la abriste. Vuelve al listado y ábrela de nuevo."));
+        return;
+      }
+      const sessions = current.emsSessions ?? [];
+      const stored = sessions.find((item) => item.id === session.id);
+      if (!stored || stored.revision !== session.revision) {
+        abort(new Error("La sesión cambió desde que la abriste. Vuelve a abrirla antes de eliminar."));
+        return;
+      }
+      const record = { ...current, emsSessions: sessions.filter((item) => item.id !== session.id) };
       store.put(record);
       setResult(record);
     };
