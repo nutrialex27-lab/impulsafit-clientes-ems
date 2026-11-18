@@ -72,14 +72,32 @@ function digitsCrop(tile) {
   return crop;
 }
 
+function startWorker(engine) {
+  return new Promise((resolve, reject) => {
+    let failed = false;
+    const fail = (error) => {
+      failed = true;
+      clearTimeout(deadline);
+      reject(error);
+    };
+    const deadline = setTimeout(() => fail(new Error("No se ha podido iniciar el lector.")), 45000);
+    engine.createWorker("eng", 1, {
+      workerPath: new URL("worker.min.js", base).href,
+      corePath: base.href,
+      langPath: base.href,
+      workerBlobURL: false,
+      errorHandler: fail,
+    }).then((worker) => {
+      clearTimeout(deadline);
+      if (failed) void worker.terminate();
+      else resolve(worker);
+    }, fail);
+  });
+}
+
 export async function readWiemsPhoto(file) {
   const [engine, photo] = await Promise.all([loadEngine(), photoCanvas(file)]);
-  const worker = await engine.createWorker("eng", 1, {
-    workerPath: new URL("worker.min.js", base).href,
-    corePath: base.href,
-    langPath: base.href,
-    workerBlobURL: false,
-  });
+  const worker = await startWorker(engine);
   try {
     await worker.setParameters({ tessedit_pageseg_mode: engine.PSM.SPARSE_TEXT });
     const first = await worker.recognize(photo, {}, { tsv: true });
