@@ -1,8 +1,9 @@
 const scope = new URL(self.registration.scope);
 const cachePrefix = "impulsafit-ems:" + scope.pathname + ":";
-const cacheName = cachePrefix + "v7";
+const cacheName = cachePrefix + "v8";
 const ocrCacheName = "impulsafit-ocr:6.0.1:" + scope.pathname;
 const home = new URL("index.html", scope).href;
+const manifest = new URL("manifest.webmanifest", scope).href;
 const assets = new Set([
   "index.html",
   "app.css",
@@ -54,6 +55,14 @@ self.addEventListener("fetch", (event) => {
     event.respondWith((async () => {
       const cache = await caches.open(cacheName);
       return (await cache.match(home)) ?? fetch(request);
+    })());
+  } else if (url.href === manifest) {
+    event.respondWith((async () => {
+      // Chrome uses the manifest to check the name and icon of the installed app.
+      const response = await fetch(request, { cache: "no-cache" }).catch(() => null);
+      if (response?.ok) return response;
+      const cache = await caches.open(cacheName);
+      return (await cache.match(request)) ?? response ?? Response.error();
     })());
   } else if (assets.has(url.href)) {
     event.respondWith((async () => {
