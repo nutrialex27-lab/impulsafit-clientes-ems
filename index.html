@@ -151,7 +151,6 @@
         <div class="ems-photo-actions">
           <button class="button primary" id="ems-take-photo" type="button">Hacer foto</button>
           <button class="button secondary" id="ems-choose-photo" type="button">Elegir foto</button>
-          <button class="button secondary" id="ems-scan-button" type="button" aria-haspopup="dialog">Cámara en directo</button>
         </div>
         <input id="ems-camera-file" type="file" accept="image/*" capture="environment" hidden>
         <input id="ems-photo-file" type="file" accept="image/*" hidden>
@@ -190,26 +189,6 @@
     <div class="dialog-actions">
       <button class="button secondary" id="cancel-ems-delete" type="button" autofocus>Cancelar</button>
       <button class="button ems-delete-session" id="confirm-ems-delete" type="button">Eliminar</button>
-    </div>
-  </dialog>
-
-  <dialog class="ems-camera-dialog" id="ems-camera-dialog" aria-labelledby="ems-camera-title" aria-describedby="ems-camera-guide">
-    <div class="dialog-heading">
-      <h2 id="ems-camera-title">Escanear intensidades</h2>
-      <p class="dialog-caption" id="ems-camera-guide">Encuadra de frente los canales y el máster de Wiems PRO. Si los números se ven borrosos, separa un poco el móvil.</p>
-    </div>
-    <video class="ems-camera-view" id="ems-camera-video" autoplay muted playsinline></video>
-    <div class="ems-camera-controls">
-      <button class="button secondary" id="ems-camera-focus" type="button" hidden>Reenfocar</button>
-      <label class="ems-field" id="ems-camera-picker" hidden>
-        <span>Cámara</span>
-        <select id="ems-camera-device"></select>
-      </label>
-    </div>
-    <p class="ems-scan-status" id="ems-camera-status" role="status"></p>
-    <div class="dialog-actions">
-      <button class="button secondary" id="ems-camera-close" type="button">Cerrar cámara</button>
-      <button class="button primary" id="ems-camera-read" type="button" disabled>Leer intensidades</button>
     </div>
   </dialog>
 

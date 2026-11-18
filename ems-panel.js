@@ -1,6 +1,6 @@
 import { clientCode, deleteEmsSession, saveEmsSession, today } from "./client-store.js";
 import { blocks, channels } from "./ems-sessions.js";
-import { readWiemsFrame, readWiemsImage } from "./ems-ocr.js";
+import { readWiemsImage } from "./ems-ocr.js";
 import { cropEmsPhoto } from "./ems-photo.js";
 
 const byId = (id) => document.getElementById(id);
@@ -20,7 +20,6 @@ const deleteCancel = byId("cancel-ems-delete");
 const deleteError = byId("ems-delete-error");
 const error = byId("ems-error");
 const feedback = byId("ems-feedback");
-const scanButton = byId("ems-scan-button");
 const takePhoto = byId("ems-take-photo");
 const choosePhoto = byId("ems-choose-photo");
 const photoReference = byId("ems-photo-reference");
@@ -28,14 +27,6 @@ const referenceImage = byId("ems-photo-reference-image");
 const scanStatus = byId("ems-scan-status");
 const scanRows = byId("ems-scan-rows");
 const scanRow = byId("ems-scan-row");
-const cameraDialog = byId("ems-camera-dialog");
-const cameraVideo = byId("ems-camera-video");
-const cameraStatus = byId("ems-camera-status");
-const cameraRead = byId("ems-camera-read");
-const cameraFocus = byId("ems-camera-focus");
-const cameraPicker = byId("ems-camera-picker");
-const cameraDevice = byId("ems-camera-device");
-const focusHint = "Separa un poco el móvil hasta que los números se vean nítidos.";
 
 const inputs = new Map();
 let client;
@@ -44,7 +35,6 @@ let session;
 let draft;
 let activeBlock;
 let pendingScan;
-let cameraRequest;
 let photoJob;
 let deleteTarget;
 let deleteTrigger;
@@ -288,159 +278,19 @@ function fillFromScan(job, values) {
   pendingScan = undefined;
 }
 
-function stopStream(stream) {
-  stream?.getTracks().forEach((track) => track.stop());
-}
-
-function stopCamera() {
-  cameraRequest = undefined;
-  cameraRead.disabled = true;
-  cameraFocus.hidden = true;
-  const stream = cameraVideo.srcObject;
-  cameraVideo.srcObject = null;
-  stopStream(stream);
-}
-
-function closeCamera() {
-  stopCamera();
-  cameraPicker.hidden = true;
-  if (cameraDialog.open) cameraDialog.close();
-}
-
-function cameraIsOpen(request) {
-  return cameraDialog.open && cameraRequest === request;
-}
-
-async function adjustFocus(request, mode, aimAtCenter = false) {
-  const { track, canTarget } = request;
-  const advanced = [{ focusMode: mode }];
-  if (aimAtCenter && canTarget) advanced.push({ pointsOfInterest: [{ x: .5, y: .5 }] });
-  cameraStatus.textContent = "Ajustando el enfoque…";
-  try {
-    await track.applyConstraints({ ...track.getConstraints(), advanced });
-    // Give the lens time to settle before allowing a frame to be read.
-    await new Promise((resolve) => setTimeout(resolve, 700));
-    return "";
-  } catch {
-    return focusHint;
-  }
-}
-
-async function updateCameraPicker(request) {
-  const activeId = request.track.getSettings?.().deviceId;
-  if (!activeId || !navigator.mediaDevices.enumerateDevices) return;
-  const devices = await navigator.mediaDevices.enumerateDevices().catch(() => []);
-  if (!cameraIsOpen(request)) return;
-  const cameras = devices.filter((device) => device.kind === "videoinput" && device.deviceId);
-  if (cameras.length < 2 || !cameras.some((camera) => camera.deviceId === activeId)) return;
-  cameraDevice.replaceChildren(...cameras.map((camera, index) =>
-    new Option(camera.label || "Cámara " + (index + 1), camera.deviceId)));
-  cameraDevice.value = activeId;
-  cameraPicker.hidden = false;
-}
-
-async function startCamera(deviceId) {
-  stopCamera();
-  const request = {};
-  cameraRequest = request;
-  cameraDevice.disabled = true;
-  cameraStatus.textContent = "Abriendo la cámara…";
-  try {
-    const source = deviceId ? { deviceId: { exact: deviceId } } : { facingMode: { ideal: "environment" } };
-    const stream = await navigator.mediaDevices.getUserMedia({
-      audio: false,
-      video: { ...source, width: { ideal: 1920 }, height: { ideal: 1080 } },
-    });
-    if (!cameraIsOpen(request)) {
-      stopStream(stream);
-      return;
-    }
-    cameraVideo.srcObject = stream;
-    const [track] = stream.getVideoTracks();
-    request.track = track;
-    track.addEventListener("ended", () => {
-      if (!cameraIsOpen(request)) return;
-      stopCamera();
-      cameraDevice.disabled = false;
-      cameraStatus.textContent = "La cámara se ha desconectado. Cierra y vuelve a abrir el escáner.";
-    }, { once: true });
-    await cameraVideo.play();
-    if (!cameraIsOpen(request)) return;
-
-    const modes = track.getCapabilities?.().focusMode ?? [];
-    const continuous = modes.includes("continuous");
-    const singleShot = modes.includes("single-shot");
-    request.canTarget = navigator.mediaDevices.getSupportedConstraints?.().pointsOfInterest;
-    request.refocusMode = singleShot ? "single-shot" : continuous && request.canTarget ? "continuous" : null;
-    const mode = continuous ? "continuous" : request.refocusMode;
-    const message = mode ? await adjustFocus(request, mode, !continuous) : focusHint;
-    if (!cameraIsOpen(request)) return;
-    cameraRead.disabled = false;
-    cameraFocus.hidden = !request.refocusMode;
-    cameraFocus.disabled = false;
-    cameraStatus.textContent = message;
-    cameraDevice.disabled = false;
-    void updateCameraPicker(request);
-  } catch (failure) {
-    if (!cameraIsOpen(request)) return;
-    stopCamera();
-    cameraDevice.disabled = false;
-    if (failure.name === "NotAllowedError") {
-      cameraStatus.textContent = "Permite el acceso a la cámara en los ajustes del sitio y vuelve a abrir el escáner.";
-    } else if (failure.name === "NotFoundError") {
-      cameraStatus.textContent = "No se encontró una cámara en este dispositivo.";
-    } else {
-      cameraStatus.textContent = "No se pudo abrir la cámara. Cierra otras apps que la estén usando e inténtalo de nuevo.";
-    }
-  }
-}
-
-scanButton.addEventListener("click", () => {
-  cameraDialog.showModal();
-  if (!navigator.mediaDevices?.getUserMedia) {
-    cameraStatus.textContent = "Abre la app en un navegador con acceso a la cámara.";
-    return;
-  }
-  void startCamera();
-});
-
-cameraDevice.addEventListener("change", () => { void startCamera(cameraDevice.value); });
-cameraFocus.addEventListener("click", async () => {
-  const request = cameraRequest;
-  if (!request?.refocusMode || cameraRead.disabled) return;
-  cameraRead.disabled = true;
-  cameraFocus.disabled = true;
-  const message = await adjustFocus(request, request.refocusMode, true);
-  if (!cameraIsOpen(request)) return;
-  cameraRead.disabled = false;
-  cameraFocus.disabled = false;
-  cameraStatus.textContent = message;
-});
-
-byId("ems-camera-close").addEventListener("click", closeCamera);
-cameraDialog.addEventListener("cancel", (event) => {
-  event.preventDefault();
-  closeCamera();
-});
-window.addEventListener("pagehide", closeCamera);
-
 function scanJob() {
   rememberBlock();
   return { draft, block: activeBlock, before: { ...draft[activeBlock] }, version: scanVersions.get(activeBlock) ?? 0 };
 }
 
 async function runScan(job, read) {
-  scanButton.disabled = true;
   takePhoto.disabled = true;
   choosePhoto.disabled = true;
   scanStatus.textContent = "Leyendo intensidades…";
   scanRows.hidden = true;
   pendingScan = undefined;
   try {
-    // El fotograma de vídeo se copia antes de cerrar la cámara.
-    const reading = read();
-    closeCamera();
-    const rows = await reading;
+    const rows = await read();
     if (!scanStillOpen(job)) return;
     if (!rows.some((values) => Object.keys(values).length)) {
       scanStatus.textContent = "No se han podido leer los valores. Ajusta el recorte para incluir los nombres de los canales, los números y el máster. También puedes completarlos a mano.";
@@ -465,19 +315,10 @@ async function runScan(job, read) {
       scanStatus.textContent = "No se pudo completar la lectura. Comprueba la conexión para iniciar el lector o completa los valores a mano.";
     }
   } finally {
-    scanButton.disabled = false;
     takePhoto.disabled = false;
     choosePhoto.disabled = false;
   }
 }
-
-cameraRead.addEventListener("click", () => {
-  if (cameraRead.disabled || form.hidden) return;
-  const job = scanJob();
-  referencePhotos.delete(job.block);
-  showBlock();
-  void runScan(job, () => readWiemsFrame(cameraVideo));
-});
 
 for (const [button, input] of [[takePhoto, byId("ems-camera-file")], [choosePhoto, byId("ems-photo-file")]]) {
   button.addEventListener("click", () => {

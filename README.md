@@ -12,7 +12,7 @@ Para eliminar una sesión completa, mantén pulsada su fecha y toca **Eliminar**
 
 Elige el bloque y pulsa **Hacer foto** para abrir la cámara del móvil o **Elegir foto** para usar una imagen guardada. Revisa el recorte propuesto. Puedes arrastrar sobre la imagen para incluir los nombres de los diez canales, los números y el máster de una sola fila. **Foto completa** permite empezar de nuevo y **Ajustar los bordes del recorte** ofrece controles adicionales. Pulsa **Leer valores**. La foto queda visible junto a los campos durante la edición del bloque. Revisa los valores, completa los pendientes y pulsa **Guardar sesión**.
 
-También puedes usar **Cámara en directo**, encuadrar los canales y el máster y pulsar **Leer intensidades**. Si aparecen varias filas, selecciona la del cliente. Tesseract.js procesa la imagen en el dispositivo, en memoria. Abre la app con conexión la primera vez que uses el lector para descargar su motor y el modelo de texto.
+Si en la foto aparecen varias filas de valores, selecciona la del cliente. Tesseract.js procesa la imagen en el dispositivo, en memoria. Abre la app con conexión la primera vez que uses el lector para descargar su motor y el modelo de texto.
 
 ## Uso e instalación
 
@@ -27,7 +27,7 @@ Sirve la raíz del repositorio con un servidor local. Por ejemplo, ejecuta `pyth
 - `index.html`, `app.css` y `app.js` definen el listado, los formularios y las acciones.
 - `client-store.js` contiene la validación y el almacenamiento en IndexedDB. Cada ficha conserva sus sesiones en `emsSessions`.
 - `ems-panel.js` controla el historial y el formulario de intensidades. `ems-sessions.js` define los bloques, los canales y su validación.
-- `ems-ocr.js` y `wiems-values.js` leen el fotograma de la cámara y alinean los números con los canales de Wiems PRO. Consulta `OCR-LICENSE.txt` para las versiones y licencias del motor.
+- `ems-ocr.js` y `wiems-values.js` leen la foto y alinean los números con los canales de Wiems PRO. Consulta `OCR-LICENSE.txt` para las versiones y licencias del motor.
 - `ems-photo.js` prepara la foto y permite ajustar el recorte antes de leerla.
 - `manifest.webmanifest` y `sw.js` habilitan la instalación y el acceso sin conexión. Actualiza la versión de caché en `sw.js` al publicar cambios de la app.
 

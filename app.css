@@ -365,24 +365,6 @@ textarea { display: block; resize: vertical; }
 .ems-scan-status { margin-top: 6px; color: var(--muted); font-size: .875rem; }
 .ems-scan-status:empty { margin: 0; }
 .ems-scan-rows { margin-top: 10px; }
-.ems-camera-dialog { width: min(760px, calc(100% - 28px)); }
-.ems-camera-view {
-  display: block;
-  width: 100%;
-  max-height: max(90px, min(56dvh, calc(100dvh - 190px)));
-  aspect-ratio: auto 16 / 9;
-  object-fit: contain;
-  border-radius: 9px;
-  background: var(--ink);
-}
-.ems-camera-controls {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: end;
-  column-gap: 10px;
-}
-.ems-camera-controls > * { margin-top: 8px; }
-.ems-camera-controls .ems-field { flex: 1 1 180px; }
 .ems-master {
   background: var(--accent-soft);
   border: 1px solid var(--line);
