@@ -1,6 +1,6 @@
 const scope = new URL(self.registration.scope);
 const cachePrefix = "impulsafit-ems:" + scope.pathname + ":";
-const cacheName = cachePrefix + "v6";
+const cacheName = cachePrefix + "v7";
 const ocrCacheName = "impulsafit-ocr:6.0.1:" + scope.pathname;
 const home = new URL("index.html", scope).href;
 const assets = new Set([
@@ -13,10 +13,10 @@ const assets = new Set([
   "ems-ocr.js",
   "wiems-values.js",
   "manifest.webmanifest",
-  "icon-192.png",
-  "icon-512.png",
-  "icon-maskable.png",
-  "apple-touch-icon.png",
+  "icon-192.png?v=7",
+  "icon-512.png?v=7",
+  "icon-maskable.png?v=7",
+  "apple-touch-icon.png?v=7",
 ].map((file) => new URL(file, scope).href));
 
 const ocrAssets = new Set([

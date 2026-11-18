@@ -3,19 +3,22 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#10212a">
-  <meta name="description" content="Alta, búsqueda y edición de fichas de clientes EMS de ImpulsaFit.">
-  <title>Clientes EMS · ImpulsaFit</title>
+  <meta name="theme-color" content="#281b3a">
+  <meta name="description" content="Fichas de clientes, historial de sesiones e intensidades de EMS de ImpulsaFit.">
+  <title>Registro EMS</title>
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="icon" type="image/png" href="./icon-192.png">
-  <link rel="apple-touch-icon" href="./apple-touch-icon.png">
+  <link rel="icon" type="image/png" href="./icon-192.png?v=7">
+  <link rel="apple-touch-icon" href="./apple-touch-icon.png?v=7">
   <link rel="stylesheet" href="./app.css">
   <script type="module" src="./app.js"></script>
 </head>
 <body>
   <header class="topbar">
     <div class="topbar-inner">
-      <span class="brand">Impulsa<span>Fit</span></span>
+      <div class="brand">
+        <img class="brand-mark" src="./icon-192.png?v=7" alt="" width="38" height="38">
+        <span>Registro EMS</span>
+      </div>
       <nav aria-label="Herramientas">
         <button class="top-action" id="backups-button" type="button">Copias</button>
         <button class="top-action install-action" id="install-button" type="button">Instalar</button>
@@ -181,7 +184,7 @@
 
   <dialog id="install-dialog" aria-labelledby="install-title">
     <div class="dialog-heading">
-      <h2 id="install-title">Instalar ImpulsaFit</h2>
+      <h2 id="install-title">Instalar Registro EMS</h2>
       <p class="dialog-caption" id="install-instructions"></p>
     </div>
     <form method="dialog" class="dialog-actions">

@@ -203,7 +203,7 @@ byId("export-backup").addEventListener("click", async () => {
     const url = URL.createObjectURL(new Blob([data], { type: "application/json" }));
     const link = document.createElement("a");
     link.href = url;
-    link.download = "impulsafit-clientes-copia-" + today() + ".json";
+    link.download = "registro-ems-copia-" + today() + ".json";
     document.body.append(link);
     link.click();
     link.remove();

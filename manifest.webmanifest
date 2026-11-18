@@ -1,16 +1,16 @@
 {
-  "name": "Clientes EMS de ImpulsaFit",
-  "short_name": "ImpulsaFit EMS",
-  "description": "Fichas y seguimiento de clientes EMS de ImpulsaFit.",
+  "name": "Registro EMS",
+  "short_name": "Registro EMS",
+  "description": "Fichas de clientes, historial de sesiones e intensidades de EMS de ImpulsaFit.",
   "lang": "es-ES",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#f3f7f8",
-  "theme_color": "#10212a",
+  "background_color": "#f1eafa",
+  "theme_color": "#281b3a",
   "icons": [
-    { "src": "./icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "./icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "./icon-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    { "src": "./icon-192.png?v=7", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "./icon-512.png?v=7", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "./icon-maskable.png?v=7", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ]
 }
