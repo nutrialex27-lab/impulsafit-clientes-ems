@@ -18,7 +18,7 @@
       <div class="brand">
         <img class="brand-mark" src="./icon-192.png?v=7" alt="" width="38" height="38">
         <span>Registro EMS</span>
-        <small class="brand-version" id="app-version">v21</small>
+        <small class="brand-version" id="app-version">v22</small>
       </div>
       <nav aria-label="Herramientas">
         <button class="top-action" id="backups-button" type="button">Copias</button>
@@ -66,6 +66,7 @@
       <p class="directory-error" id="directory-error" role="alert" hidden></p>
     </section>
     <p class="feedback" id="feedback" role="status"></p>
+    <p class="routine-inbox-notice" id="routine-inbox-notice" hidden>Hay una rutina de Impulsagen preparada. Abre un cliente y pulsa «Plan de cuatro semanas» para asignársela.</p>
     <noscript><p>Activa JavaScript para gestionar tus fichas.</p></noscript>
   </main>
 
@@ -124,9 +125,11 @@
     </div>
 
     <section id="ems-overview" aria-labelledby="ems-history-title">
+      <div class="training-cycle-card" id="training-cycle-card"></div>
+      <div class="training-actions"><button class="button secondary" id="open-training-cycle" type="button">Plan de cuatro semanas</button><button class="button secondary" id="open-training-report" type="button">Ver evolución</button></div>
       <div class="ems-history-heading">
         <h3 id="ems-history-title">Sesiones</h3>
-        <button class="button primary" id="new-ems-session" type="button">Nueva sesión</button>
+        <button class="button primary" id="new-ems-session" type="button">Iniciar sesión</button>
       </div>
       <p class="ems-empty" id="ems-empty">Aún no hay sesiones de intensidades.</p>
       <ul class="ems-history" id="ems-history"></ul>
@@ -138,6 +141,8 @@
     </section>
 
     <form id="ems-form" hidden>
+      <p class="training-session-label" id="training-session-label"></p>
+      <label class="ems-field training-recovery"><span>Cómo llega hoy</span><select id="training-recovery"><option value="">Comprobar recuperación</option><option value="good">Recuperado, sin molestias</option><option value="tired">Fatiga o recuperación incompleta</option><option value="discomfort">Molestias o malestar por valorar</option></select></label>
       <div class="ems-controls">
         <label class="ems-field">
           <span>Fecha de sesión</span>
@@ -148,6 +153,8 @@
           <select id="ems-block"></select>
         </label>
       </div>
+      <p class="training-parameters" id="training-block-parameters"></p>
+      <section class="training-loads" id="training-loads" hidden><details><summary>Ejercicios y cargas de este bloque</summary><div id="training-exercises"></div></details><button class="button secondary" id="confirm-training-loads" type="button">Confirmar mismas cargas de la rutina</button><p class="training-help">Las cargas anteriores son referencias hasta que las confirmes o edites.</p></section>
       <section class="ems-rounds" id="ems-rounds" aria-label="Registro por vueltas" hidden>
         <div class="ems-controls">
           <label class="ems-field">
@@ -161,6 +168,7 @@
         </div>
         <p id="ems-round-summary" role="status"></p>
       </section>
+      <div class="training-quick-actions"><p id="training-reference"></p><div class="training-actions"><button class="button secondary" id="copy-ems-values" type="button">Mismos mA</button><button class="button secondary" id="review-ems-values" type="button" hidden>Confirmar valores de la foto</button><button class="button secondary" id="next-ems-record" type="button">Siguiente vuelta</button></div><p class="training-help" id="training-record-status" role="status"></p></div>
       <div class="ems-scan">
         <div class="ems-photo-actions">
           <button class="button primary" id="ems-take-photo" type="button">Hacer foto</button>
@@ -185,10 +193,17 @@
       <div class="ems-block-actions" role="group" aria-label="Acciones del registro seleccionado">
         <button class="button secondary" id="reset-ems-values" type="button" disabled>Reset valores</button>
       </div>
+      <details class="training-response"><summary>Respuesta de este bloque</summary><div class="training-fields"><div class="ems-controls">
+        <label class="ems-field"><span>Percepción de corriente</span><select id="training-perception"><option value="">Sin valorar</option><option value="low">Por debajo del objetivo individual</option><option value="adequate">Adecuada</option><option value="high">Excesiva</option></select></label>
+        <label class="ems-field"><span>Ejecución</span><select id="training-technique"><option value="">Sin valorar</option><option value="good">Trabajo completado correctamente</option><option value="limited">Dificultad para ejecutar</option></select></label>
+      </div><label class="ems-field"><span>Sensación de corriente · 0 a 10, opcional</span><input id="training-sensation" type="number" min="0" max="10" step="0.5"></label><details><summary>Percepción por zona</summary><div class="training-zone-fields" id="training-zones"></div></details></div></details>
+      <aside class="training-suggestion" id="training-suggestion" aria-live="polite"></aside>
+      <label class="ems-field training-notes"><span>Notas de la sesión · opcional</span><textarea id="training-notes" rows="2" maxlength="2000"></textarea></label>
       <p class="form-error" id="ems-error" role="alert" hidden></p>
       <div class="dialog-actions">
         <button class="button secondary" id="cancel-ems-session" type="button">Cancelar</button>
         <button class="button primary" id="save-ems-session" type="submit">Guardar sesión</button>
+        <button class="button primary" id="finish-ems-session" type="submit">Guardar y ver informe</button>
       </div>
     </form>
   </dialog>

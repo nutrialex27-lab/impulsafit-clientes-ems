@@ -16,13 +16,25 @@ Si en la foto aparecen varias filas de valores, selecciona la del cliente. El m�
 
 ## Uso e instalación
 
+### Ciclos, cargas e informes (v22)
+
+En Impulsagen, prepara la rutina y pulsa **Usar en Registro EMS**. La copia enviada incluye los ejercicios y parámetros actuales, también los cambios que aún estén en los campos de edición. En la ficha del cliente abre **Plan de cuatro semanas**, revisa la rutina recibida y elige fecha de inicio, una o dos visitas semanales y experiencia del cliente. El ciclo conserva una copia fija: cambiar el generador después no modifica las sesiones. Para otro dispositivo usa **Archivo para Registro EMS** en el generador e importa el JSON en el plan del cliente.
+
+**Iniciar sesión** recupera los ejercicios del ciclo y las últimas cargas confirmadas como referencias pendientes. Despliega **Ejercicios y cargas de este bloque** para introducir kg totales, kg por mancuerna, peso corporal, banda u otra carga. **Confirmar mismas cargas** confirma las referencias de toda la rutina; editar una carga confirma únicamente ese ejercicio. **Mismos mA** copia y confirma los valores de la vuelta anterior de hoy o, si no hay, de la misma vuelta de una sesión anterior comparable. Los campos nuevos siguen vacíos hasta introducir o confirmar datos. **Siguiente vuelta** agiliza el registro. Los bloques y vueltas proceden de la rutina; Activación y Vuelta a la calma mantienen una toma única. También se admiten bloques repetidos y bloques sin EMS.
+
+Registra cómo llega el cliente y, opcionalmente, su percepción de corriente y ejecución por bloque o zona. Las sugerencias explican qué revisar y nunca calculan ni aplican una subida de mA. Una foto deja sus valores pendientes hasta pulsar **Confirmar valores de la foto**; editar un campo no confirma el resto de la lectura. Los informes omiten las lecturas pendientes. Las sugerencias de progresión requieren una rutina vinculada y datos comparables.
+
+**Guardar y ver informe** abre las gráficas; **Ver evolución** permite consultarlas después. Elige sesión, ciclo de cuatro semanas o mes natural, un bloque, una vuelta y hasta tres canales, además del máster. Se separan los ciclos o programas diferentes, se conservan los ceros y los datos ausentes quedan vacíos. Las cargas confirmadas aparecen debajo. **Compartir por WhatsApp** abre el panel de compartir del móvil cuando admite archivos; el entrenador elige el contacto y confirma el envío. Si el navegador no comparte archivos, descarga el PNG para adjuntarlo. Los informes muestran intensidades registradas, no porcentajes de fuerza ni resultados físicos inferidos.
+
+Los respaldos v4 incluyen ciclos, rutinas, cargas, valoraciones y estado de revisión, además de todos los registros anteriores. La foto de referencia permanece solo durante la edición; no se incorpora al respaldo. Las sesiones sin mA, cargas confirmadas, valoraciones ni notas no se guardan en el historial.
+
 Abre la URL de GitHub Pages en Chrome, Edge o Safari y usa **Instalar**. En iPhone y iPad, desde Safari usa **Compartir** y **Añadir a pantalla de inicio**. La app funciona sin conexión después de que el navegador guarde sus archivos en la primera visita.
 
 Las fichas y sus sesiones se guardan en el navegador de cada dispositivo. En **Copias** puedes descargar un respaldo JSON y restaurarlo en otro dispositivo. Restaurar una copia sustituye el listado de ese dispositivo. Las copias de seguridad incluyen todas las vueltas y admiten las copias anteriores de la app.
 
 ## Desarrollo
 
-Comprueba el registro por vueltas y las copias con `node --test ems-rounds.test.mjs`.
+Comprueba vueltas, copias, ciclos, comparabilidad y sugerencias con `node --test ems-rounds.test.mjs ems-training.test.mjs`.
 
 Sirve la raíz del repositorio con un servidor local. Por ejemplo, ejecuta `python -m http.server 8000` y abre `http://localhost:8000`. En GitHub Pages, selecciona **Deploy from a branch**, rama `main` y carpeta `/ (root)`.
 
@@ -31,6 +43,7 @@ Sirve la raíz del repositorio con un servidor local. Por ejemplo, ejecuta `pyth
 - `ems-panel.js` controla el historial y el formulario de intensidades. `ems-sessions.js` define los bloques, los canales y su validación.
 - `ems-ocr.js` y `wiems-values.js` leen la foto y alinean los números con los canales de Wiems PRO. Consulta `OCR-LICENSE.txt` para las versiones y licencias del motor.
 - `ems-photo.js` prepara la foto y permite ajustar el recorte antes de leerla.
+- `ems-training.js` valida las rutinas, ciclos y seguimientos; `ems-cycle.js` edita el ciclo. `ems-progress.js` prepara y dibuja los informes y `ems-report.js` permite seleccionarlos, descargarlos y compartirlos.
 - `manifest.webmanifest` y `sw.js` habilitan la instalación y el acceso sin conexión. Actualiza la versión de caché en `sw.js` al publicar cambios de la app.
 
 Sube al repositorio el código de la app. Conserva tus copias de clientes fuera del repositorio.

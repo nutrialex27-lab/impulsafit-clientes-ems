@@ -1,4 +1,5 @@
 import { readSession, validDate } from "./ems-sessions.js";
+import { hasSessionData, readCycle, readTrainingDetails } from "./ems-training.js";
 
 export const statuses = Object.freeze(["Activo", "En pausa", "Baja"]);
 export const goals = Object.freeze([
@@ -142,11 +143,14 @@ export function deleteClient(previous) {
 }
 
 export function saveEmsSession(fields, client, previous) {
+  const details = readTrainingDetails(fields);
   const session = {
-    ...readSession(fields, { allowEmpty: Boolean(previous) }),
+    ...readSession({ ...fields, routine: details.routine }, { allowEmpty: true }),
+    ...details,
     id: previous?.id ?? crypto.randomUUID(),
     revision: crypto.randomUUID(),
   };
+  if (!previous && !hasSessionData(session)) throw new Error("Anota valores, confirma cargas o registra una valoración para guardar la sesión.");
   return transaction("readwrite", (store, setResult, abort) => {
     const request = store.get(client.id);
     request.onsuccess = () => {
@@ -156,16 +160,40 @@ export function saveEmsSession(fields, client, previous) {
         return;
       }
       const sessions = current.emsSessions ?? [];
+      if (session.cycleId) {
+        const cycle = current.trainingCycles?.find((item) => item.id === session.cycleId);
+        if (!cycle || JSON.stringify(cycle.routine) !== JSON.stringify(session.routine)) {
+          abort(new Error("El ciclo de la sesión cambió. Vuelve a abrir el cliente."));
+          return;
+        }
+      }
       const index = sessions.findIndex((stored) => stored.id === session.id);
       if (previous && sessions[index]?.revision !== previous.revision) {
         abort(new Error("La sesión cambió desde que la abriste. Vuelve a abrirla antes de editar."));
         return;
       }
       const updated = [...sessions];
-      if (previous && Object.keys(session.blocks).length === 0) updated.splice(index, 1);
+      if (previous && !hasSessionData(session)) updated.splice(index, 1);
       else if (previous) updated[index] = session;
       else updated.push(session);
       const record = { ...current, emsSessions: updated };
+      store.put(record);
+      setResult(record);
+    };
+  });
+}
+
+export function saveTrainingCycle(fields, client) {
+  const cycle = readCycle({ ...fields, id: crypto.randomUUID() });
+  return transaction("readwrite", (store, setResult, abort) => {
+    const request = store.get(client.id);
+    request.onsuccess = () => {
+      const current = request.result;
+      if (!current || current.revision !== client.revision) {
+        abort(new Error("La ficha cambió. Vuelve al listado y abre el cliente de nuevo."));
+        return;
+      }
+      const record = { ...current, trainingCycles: [...(current.trainingCycles ?? []), cycle], activeCycleId: cycle.id, revision: crypto.randomUUID() };
       store.put(record);
       setResult(record);
     };
@@ -199,7 +227,7 @@ export function encodeBackup(clients) {
     ...client,
     emsSessions: emsSessions.map(({ revision: sessionRevision, ...session }) => session),
   }));
-  return JSON.stringify({ format: backupFormat, version: 3, clients: records }, null, 2);
+  return JSON.stringify({ format: backupFormat, version: 4, clients: records }, null, 2);
 }
 
 function decodeSessions(sessions) {
@@ -210,13 +238,14 @@ function decodeSessions(sessions) {
       throw new Error("La copia contiene sesiones EMS inválidas o repetidas.");
     }
     ids.add(session.id);
-    return { ...readSession(session, { allowEmpty: true }), id: session.id };
+    const details = readTrainingDetails(session);
+    return { ...readSession({ ...session, routine: details.routine }, { allowEmpty: true }), ...details, id: session.id };
   });
 }
 
 export function decodeBackup(contents) {
   const backup = JSON.parse(contents);
-  if (backup?.format !== backupFormat || ![1, 2, 3].includes(backup.version) || !Array.isArray(backup.clients)) {
+  if (backup?.format !== backupFormat || ![1, 2, 3, 4].includes(backup.version) || !Array.isArray(backup.clients)) {
     throw new Error("Selecciona una copia de seguridad de Clientes EMS.");
   }
   const ids = new Set();
@@ -230,7 +259,15 @@ export function decodeBackup(contents) {
     }
     ids.add(id);
     const emsSessions = backup.version >= 2 ? decodeSessions(client.emsSessions) : [];
-    return { ...readFields(client), id, joinedOn, emsSessions };
+    const trainingCycles = client.trainingCycles ?? [];
+    if (!Array.isArray(trainingCycles) || trainingCycles.length > 500) throw new Error("La copia contiene ciclos inválidos.");
+    const cycles = trainingCycles.map(readCycle), cycleIds = new Set(cycles.map((cycle) => cycle.id));
+    if (cycleIds.size !== cycles.length || client.activeCycleId && !cycleIds.has(client.activeCycleId)) throw new Error("La copia contiene ciclos repetidos o una referencia inválida.");
+    for (const session of emsSessions) if (session.cycleId) {
+      const cycle = cycles.find((item) => item.id === session.cycleId);
+      if (!cycle || JSON.stringify(cycle.routine) !== JSON.stringify(session.routine)) throw new Error("La sesión no coincide con la rutina de su ciclo.");
+    }
+    return { ...readFields(client), id, joinedOn, emsSessions, trainingCycles: cycles, ...(client.activeCycleId ? { activeCycleId: client.activeCycleId } : {}) };
   });
 }
 

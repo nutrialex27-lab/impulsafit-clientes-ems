@@ -10,7 +10,10 @@ export const blocks = [
 // Impulsagen's standard 35-minute session: strength 3 rounds,
 // full body 4, core 4 and metabolic 3. Each block remains adjustable.
 export const defaultRoundCounts = Object.freeze({ strength: 3, fullBody: 4, core: 4, metabolic: 3 });
-export const hasRounds = (blockId) => Object.hasOwn(defaultRoundCounts, blockId);
+export const baseBlockId = (blockId) => blockId.replace(/-\d+$/, "");
+export const hasRounds = (blockId) => Object.hasOwn(defaultRoundCounts, baseBlockId(blockId));
+export const roundDefault = (blockId) => defaultRoundCounts[baseBlockId(blockId)] ?? 1;
+export const blockDefinitions = (routine) => routine?.blocks.map(({ id, name }) => [id, name]) ?? blocks;
 export const maxRounds = 100;
 
 export const channels = [
@@ -46,10 +49,12 @@ function milliampValue(value, block, field) {
   return number;
 }
 
-export function readSession({ date, blocks: input }, { allowEmpty = false } = {}) {
+export function readSession({ date, blocks: input, routine }, { allowEmpty = false } = {}) {
   if (!validDate(date)) throw new Error("Introduce una fecha de sesión válida.");
   const recorded = {};
-  for (const [blockId, blockLabel] of blocks) {
+  const definitions = blockDefinitions(routine);
+  if (Object.keys(input ?? {}).some((id) => !definitions.some(([key]) => id === key))) throw new Error("Hay registros de un bloque que no pertenece a esta rutina.");
+  for (const [blockId, blockLabel] of definitions) {
     const block = input?.[blockId];
     if (!block) continue;
     const fields = [["master", "Máster"], ...channels];
@@ -58,7 +63,7 @@ export function readSession({ date, blocks: input }, { allowEmpty = false } = {}
     if (hasRounds(blockId)) {
       if (block.rounds === undefined) {
         // Existing records become the first round, with no invented values.
-        readings = Array.from({ length: defaultRoundCounts[blockId] }, (_, index) => index === 0 ? block : {});
+        readings = Array.from({ length: roundDefault(blockId) }, (_, index) => index === 0 ? block : {});
       } else {
         if (!Array.isArray(block.rounds) || block.rounds.length < 1 || block.rounds.length > maxRounds
           || fields.some(([id]) => block[id] != null && block[id] !== "")) {

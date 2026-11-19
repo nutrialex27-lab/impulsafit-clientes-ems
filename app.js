@@ -11,6 +11,11 @@ import {
   today,
 } from "./client-store.js";
 import { openEmsPanel } from "./ems-panel.js";
+import { receivedRoutine, routineInbox } from "./ems-training.js";
+
+const showRoutineNotice = () => { document.getElementById("routine-inbox-notice").hidden = !receivedRoutine(); };
+showRoutineNotice();
+window.addEventListener("storage", (event) => { if (event.key === routineInbox) showRoutineNotice(); });
 
 const byId = (id) => document.getElementById(id);
 const creator = byId("new-client");
@@ -371,7 +376,7 @@ installButton.addEventListener("click", async () => {
 });
 
 if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("./sw.js?v=21", { updateViaCache: "none" }).catch((error) => {
+  navigator.serviceWorker.register("./sw.js?v=22", { updateViaCache: "none" }).catch((error) => {
     console.warn("No se pudo preparar el uso sin conexión.", error);
   });
 }

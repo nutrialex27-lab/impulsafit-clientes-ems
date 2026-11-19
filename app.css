@@ -386,6 +386,46 @@ textarea { display: block; resize: vertical; }
 .ems-number { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 6px; }
 .ems-number > span { color: var(--muted); font-size: .76rem; font-weight: 600; }
 
+.routine-inbox-notice { padding: 14px 16px; margin-top: 18px; border: 1px solid var(--accent); border-radius: 10px; background: #fff; line-height: 1.5; }
+.training-dialog { width: min(680px, calc(100% - 28px)); }
+.training-report-dialog { width: min(720px, calc(100% - 28px)); }
+.training-cycle-card { padding: 15px; background: var(--accent-soft); border: 1px solid var(--line); border-radius: 10px; }
+.training-cycle-card strong { display: block; font-size: 1rem; overflow-wrap: anywhere; }
+.training-cycle-card p { margin-top: 7px; color: var(--muted); font-size: .875rem; line-height: 1.5; }
+.training-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 12px 0; }
+.training-actions .button { font-size: .875rem; }
+.training-fields { display: grid; gap: 13px; margin-top: 14px; }
+.training-help { color: var(--muted); font-size: .875rem; line-height: 1.5; margin-top: 9px; }
+.training-preview { background: var(--accent-soft); border-radius: 9px; padding: 13px; margin-top: 14px; }
+.training-preview ul { margin: 8px 0 0; padding-left: 20px; display: grid; gap: 7px; font-size: .875rem; line-height: 1.45; }
+.ems-history-heading { margin-top: 22px; }
+.training-session-label { font-weight: 700; font-size: .9rem; margin-bottom: 13px; line-height: 1.5; }
+.training-recovery { margin-bottom: 14px; }
+.training-parameters { margin-top: 10px; color: var(--muted); font-size: .875rem; line-height: 1.45; }
+.training-parameters:empty { display: none; }
+.training-loads, .training-response { border: 1px solid var(--line); border-radius: 9px; padding: 12px; margin-top: 14px; }
+.training-loads summary, .training-response summary { cursor: pointer; font-weight: 700; font-size: .9rem; }
+.training-exercise { display: grid; gap: 8px; padding: 13px 0; border-bottom: 1px solid var(--line); }
+.training-exercise:last-child { border-bottom: none; }
+.training-exercise strong { font-size: .9rem; line-height: 1.45; }
+.training-exercise small { color: var(--muted); font-size: .875rem; }
+.training-exercise > input { font-size: .9rem; }
+.training-load-fields { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); align-items: end; gap: 8px; }
+.training-load-fields select { min-width: 0; font-size: .9rem; }
+#confirm-training-loads { margin-top: 8px; font-size: .875rem; }
+.training-quick-actions { margin-top: 14px; }
+.training-quick-actions > p:first-child { font-size: .875rem; line-height: 1.45; color: var(--muted); }
+.training-zone-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 12px; }
+.training-suggestion { background: #f6f2fc; border-left: 4px solid var(--accent); padding: 12px 14px; border-radius: 6px; margin-top: 16px; }
+.training-suggestion strong { font-size: .95rem; }
+.training-suggestion p { margin-top: 5px; font-size: .875rem; line-height: 1.5; }
+.training-suggestion small { display: block; color: var(--muted); font-size: .8rem; margin-top: 6px; }
+.training-suggestion[data-tone="review"] { border-color: #a16b28; background: #fff8ed; }
+.training-suggestion[data-tone="alert"] { border-color: #892127; background: #fdf0f1; }
+.training-notes { margin-top: 16px; }
+#report-canvas { display: block; width: 100%; height: auto; margin-top: 16px; border: 1px solid var(--line); border-radius: 10px; }
+#report-status { line-height: 1.45; }
+
 @media (max-width: 655px) {
   .topbar-inner, .page { padding-left: 16px; padding-right: 16px; }
   .topbar-inner { min-height: 60px; }
@@ -413,5 +453,6 @@ textarea { display: block; resize: vertical; }
   .field-row { grid-template-columns: 1fr; }
   .ems-controls { grid-template-columns: 1fr; }
   .ems-channels { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .training-zone-fields { grid-template-columns: 1fr; }
   dialog { padding: 17px; }
 }

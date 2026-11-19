@@ -62,7 +62,7 @@ test("backups preserve every round and restore legacy v1 and v2 copies", () => {
   const blocks = readSession({ date, blocks: { strength: { rounds: [complete(35), {}, complete(50)] }, fullBody: { rounds: [complete(40), {}, complete(64)] }, activation: { master: 25 } } }).blocks;
   const encoded = encodeBackup([client(blocks)]);
   const backup = JSON.parse(encoded);
-  assert.equal(backup.version, 3);
+  assert.equal(backup.version, 4);
   assert.equal(backup.clients[0].revision, undefined);
   assert.equal(backup.clients[0].emsSessions[0].revision, undefined);
   assert.deepEqual(decodeBackup(encoded)[0].emsSessions[0].blocks, blocks);
