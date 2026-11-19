@@ -1,10 +1,12 @@
-import { clientCode, deleteEmsSession, saveEmsSession, today } from "./client-store.js";
+import { clientCode, deleteCaptureSession, deleteEmsSession, saveEmsSession, today } from "./client-store.js";
 import { blocks, blockDefinitions, channels, hasRounds, maxRounds, roundDefault } from "./ems-sessions.js";
 import { readWiemsImage } from "./ems-ocr.js";
 import { cropEmsPhoto } from "./ems-photo.js";
 import { blockSuggestion, formatLoad, hasReading, hasSessionData, latestLoads, loadUnits, perceptions, previousSession, recordId, valuesFor } from "./ems-training.js";
 import { cycleDescription, openCycleEditor } from "./ems-cycle.js";
 import { openTrainingReport } from "./ems-report.js";
+import { activeWork, appendCapturePhoto, capturePhotos, draftId, getLocalPhoto, listCaptures, listLocalDrafts, markPhotoReviewed, readLocalDraft, removeLocalDraft, saveLocalDraft } from "./ems-local.js";
+import { openPhotoInbox } from "./ems-inbox.js";
 
 const byId = (id) => document.getElementById(id);
 const dialog = byId("ems-dialog");
@@ -47,6 +49,9 @@ let pendingScan;
 let photoJob;
 let deleteTarget;
 let deleteTrigger;
+let workId, reviewContext, dirty = false, viewVersion = 0, autoVersion = 0, autosavePromise = Promise.resolve(), preparingEditor = false;
+const photoIds = new Map();
+const localImageUrls = new Set();
 const referencePhotos = new Map();
 const scanVersions = new Map();
 const scanMessages = new Map();
@@ -55,6 +60,45 @@ const roundSelections = new Map();
 const recordKey = (block = activeBlock, round = activeRound) => block + ":" + round;
 const hasValues = (values) => Object.values(values).some((value) => value != null && String(value).trim() !== "");
 const inputValues = () => Object.fromEntries([...inputs].map(([key, input]) => [key, input.value]));
+
+// Keep the optional tracking controls out of the normal photo-review path.
+for (const node of [byId("training-session-label"), byId("training-recovery").closest("label"), byId("training-block-parameters"), byId("training-loads"), roundCount.closest("label"), byId("training-perception").closest("details.training-response"), byId("training-suggestion"), byId("training-notes").closest("label"), resetValues.closest(".ems-block-actions")]) byId("ems-extra-fields").append(node);
+
+function releaseLocalImages() { for (const url of localImageUrls) URL.revokeObjectURL(url); localImageUrls.clear(); }
+function localPhotoUrl(photo) { const url = URL.createObjectURL(photo.blob); localImageUrls.add(url); return url; }
+
+function persistEditor(changed = false) {
+  if (preparingEditor || form.hidden || !dialog.open || !workId || !draft) return autosavePromise;
+  if (changed) dirty = true;
+  rememberBlock();
+  const id = draftId(client.id, workId), token = ++autoVersion;
+  const record = { id, clientId: client.id, sessionId: workId, baseRevision: session?.revision ?? null,
+    dirty, payload: structuredClone(currentSession()), selection: { block: activeBlock, round: activeRound, rounds: [...roundSelections] },
+    photoIds: [...photoIds], ...(reviewContext ? { review: { photoId: reviewContext.photo.id, captureId: reviewContext.capture.id } } : {}) };
+  const status = byId("ems-autosave"); status.textContent = "Guardando borrador…"; status.dataset.error = "false";
+  autosavePromise = saveLocalDraft(record).then(() => {
+    if (token === autoVersion) status.textContent = "Borrador guardado en este dispositivo";
+    return true;
+  }).catch((failure) => {
+    if (token === autoVersion) { status.textContent = "No se pudo guardar el borrador. Mantén esta pantalla abierta y vuelve a intentarlo. " + failure.message; status.dataset.error = "true"; }
+    return false;
+  });
+  return autosavePromise;
+}
+
+async function inbox(capture) {
+  activeWork(null);
+  await openPhotoInbox(client, { capture }, {
+    review: (context) => { void editSession(client.emsSessions?.find((item) => item.id === context.capture.id) ?? null, { capture: context.capture, review: context, readPhoto: true }); },
+    close: () => { void showOverview(); },
+    values: (group) => { void editSession(client.emsSessions?.find((session) => session.id === group.id) ?? null); },
+  });
+}
+
+async function openDraft(record) {
+  const existing = client.emsSessions?.find((item) => item.id === record.sessionId) ?? null;
+  await editSession(existing, { savedDraft: record, id: record.sessionId });
+}
 
 function ensureBlock() {
   draft[activeBlock] ??= hasRounds(activeBlock)
@@ -94,6 +138,7 @@ function addInput(container, id, label) {
   input.type = "text";
   input.inputMode = "decimal";
   input.autocomplete = "off";
+  input.maxLength = 32;
   input.addEventListener("input", () => {
     const source = followup.sources[recordKey()];
     if (source?.method !== "photo" || source.reviewed) followup.sources[recordKey()] = { method: "manual", reviewed: true };
@@ -111,7 +156,12 @@ for (const [id, label] of blocks) blockPicker.add(new Option(label, id));
 addInput(byId("ems-master-field"), "master", "Máster del bloque");
 for (const [id, label] of channels) addInput(byId("ems-channels"), id, label);
 
-function showOverview() {
+async function showOverview() {
+  const version = ++viewVersion;
+  form.hidden = true; overview.hidden = false;
+  preparingEditor = false;
+  byId("ems-extra-options").open = false;
+  releaseLocalImages();
   referencePhotos.clear();
   referenceImage.removeAttribute("src");
   photoReference.hidden = true;
@@ -123,8 +173,20 @@ function showOverview() {
   description.textContent = cycle ? cycleDescription(cycle) + " · " + sessions.filter((item) => item.cycleId === cycle.id).length + " registradas"
     : "Asigna una rutina de Impulsagen para registrar sus ejercicios, cargas y evolución.";
   card.append(heading, description);
+  let captures = [], localDrafts = [];
+  try { [captures, localDrafts] = await Promise.all([listCaptures(client.id), listLocalDrafts(client.id)]); }
+  catch (failure) { feedback.textContent = failure.message; }
+  if (version !== viewVersion || !dialog.open) return;
+  const draftList = byId("ems-drafts"); draftList.replaceChildren();
+  for (const record of localDrafts.filter((item) => item.dirty)) {
+    const button = document.createElement("button"); button.type = "button"; button.className = "button secondary resume-draft";
+    button.textContent = "Continuar borrador · " + (record.payload.date || "sin fecha").split("-").reverse().join("/");
+    button.addEventListener("click", () => { void openDraft(record); }); draftList.append(button);
+  }
+  const merged = new Map(sessions.map((item) => [item.id, { ...item, saved: item }]));
+  for (const capture of captures) merged.set(capture.id, { ...(merged.get(capture.id) ?? { id: capture.id, date: capture.date, blocks: {} }), capture });
   const dateCounts = new Map();
-  const entries = sessions.map((item) => {
+  const entries = [...merged.values()].map((item) => {
     const number = (dateCounts.get(item.date) ?? 0) + 1;
     dateCounts.set(item.date, number);
     return { item, number };
@@ -141,14 +203,14 @@ function showOverview() {
     label.textContent = dateCounts.get(item.date) > 1 ? date + " · sesión " + number : date;
     const summary = document.createElement("span");
     const count = Object.keys(item.blocks).length;
-    summary.textContent = count ? count + (count === 1 ? " bloque" : " bloques") : "Cargas y seguimiento";
+    summary.textContent = item.capture ? item.capture.photoCount + " fotos · " + (item.capture.photoCount - item.capture.reviewedCount) + " pendientes" : count ? count + (count === 1 ? " bloque" : " bloques") : "Cargas y seguimiento";
     button.append(label, summary);
     bindSessionActions(button, item, label.textContent);
     row.append(button);
     history.append(row);
   }
-  byId("ems-empty").hidden = sessions.length > 0;
-  byId("ems-history-hint").hidden = sessions.length === 0;
+  byId("ems-empty").hidden = entries.length > 0;
+  byId("ems-history-hint").hidden = entries.length === 0;
   form.hidden = true;
   overview.hidden = false;
 }
@@ -195,7 +257,7 @@ function bindSessionActions(button, item, label) {
   button.addEventListener("click", (event) => {
     stopHold();
     if (sessionActions.open || (held && event.detail !== 0)) { event.preventDefault(); return; }
-    editSession(item);
+    if (item.capture) { void inbox(item.capture); } else void editSession(item.saved ?? item);
   });
 }
 
@@ -214,7 +276,7 @@ deleteConfirm.addEventListener("click", async () => {
   deleteCancel.disabled = true;
   deleteError.hidden = true;
   try {
-    client = await deleteEmsSession(client, deleteTarget);
+    client = deleteTarget.capture && !deleteTarget.saved ? await deleteCaptureSession(client, deleteTarget.capture) : await deleteEmsSession(client, deleteTarget.saved ?? deleteTarget);
     onSave(client);
     showOverview();
     sessionActions.close();
@@ -240,7 +302,7 @@ function showBlock() {
     const value = recordValues()[key];
     input.value = typeof value === "number" ? String(value).replace(".", ",") : value ?? "";
   }
-  const reference = referencePhotos.get(recordKey());
+  const reference = referencePhotos.get(recordKey()) ?? reviewContext?.url;
   photoReference.hidden = !reference;
   photoReference.querySelector("summary").textContent = multiple
     ? "Foto de la vuelta " + (activeRound + 1) + " para revisar los valores" : "Foto del bloque para revisar los valores";
@@ -280,6 +342,7 @@ function updateBlockActions() {
   resetValues.disabled = saveButton.disabled || (!hasValues(inputValues()) && !referencePhotos.has(recordKey()));
   updateRoundOptions();
   if (followup) { updateQuickActions(); renderSuggestion(); }
+  if (!preparingEditor && !form.hidden) void persistEditor();
 }
 
 function rememberBlock() {
@@ -287,7 +350,7 @@ function rememberBlock() {
 }
 
 function currentSession() {
-  return { ...(session?.id ? { id: session.id } : {}), date: dateInput.value, blocks: draft,
+  return { id: workId ?? session?.id, date: dateInput.value, blocks: draft,
     ...(routine ? { routine } : {}), ...(cycleId ? { cycleId } : {}), followup };
 }
 
@@ -309,7 +372,7 @@ function updateQuickActions() {
   byId("training-reference").textContent = reference ? "Referencia: " + reference.label + (reference.pending ? " · foto pendiente de confirmar" : "") : "Sin referencia comparable. Anota los valores o haz una foto.";
   for (const [id, input] of inputs) input.placeholder = reference?.values[id] != null ? "Antes: " + reference.values[id] : "";
   const source = followup.sources[recordKey()];
-  byId("review-ems-values").hidden = source?.method !== "photo" || source.reviewed;
+  byId("review-ems-values").hidden = Boolean(reviewContext) || source?.method !== "photo" || source.reviewed;
   byId("training-record-status").textContent = source?.method === "photo" && !source.reviewed ? "Foto pendiente de revisión. Los campos vacíos quedan sin registrar."
     : source?.method === "confirmed" ? "Valores confirmados · " + source.reference : source?.reviewed ? "Valores revisados." : "";
   const lastRound = !hasRounds(activeBlock) || activeRound === draft[activeBlock].rounds.length - 1;
@@ -411,6 +474,7 @@ byId("confirm-training-loads").addEventListener("click", () => {
   renderLoads(routine?.blocks.find((block) => block.id === activeBlock)); renderSuggestion();
 });
 byId("copy-ems-values").addEventListener("click", () => {
+  dirty = true;
   const reference = referenceRecord(); if (!reference || reference.pending) return;
   const key = recordKey(); scanVersions.set(key, (scanVersions.get(key) ?? 0) + 1); referencePhotos.delete(key);
   if (pendingScan && jobIsSelected(pendingScan.job)) pendingScan = undefined;
@@ -428,41 +492,87 @@ byId("next-ems-record").addEventListener("click", () => {
   roundSelections.set(activeBlock, activeRound); blockPicker.value = activeBlock; error.hidden = true; showBlock(); blockPicker.focus();
 });
 
-function editSession(existing = null) {
+async function editSession(existing = null, options = {}) {
+  const token = ++viewVersion, editingClientId = client.id;
+  preparingEditor = true;
+  let savedDraft = options.savedDraft;
+  let id = existing?.id ?? options.capture?.id ?? options.id ?? crypto.randomUUID();
+  try { savedDraft ??= await readLocalDraft(draftId(client.id, id)); }
+  catch (failure) { feedback.textContent = failure.message; }
+  if (token !== viewVersion || !dialog.open || editingClientId !== client.id) return;
+  let conflict = false;
+  if (savedDraft && (savedDraft.baseRevision ?? null) !== (existing?.revision ?? null)) {
+    // Keep an older draft as a separate recoverable draft instead of replacing newer saved values.
+    const recoveredId = crypto.randomUUID();
+    const recovered = { ...savedDraft, sessionId: recoveredId, id: draftId(client.id, recoveredId), baseRevision: null, payload: { ...savedDraft.payload, id: recoveredId }, dirty: true };
+    await saveLocalDraft(recovered); await removeLocalDraft(savedDraft.id); savedDraft = null; conflict = true;
+  }
+  releaseLocalImages(); photoIds.clear();
   referencePhotos.clear();
   scanVersions.clear();
   scanMessages.clear();
   roundSelections.clear();
   session = existing;
+  workId = id;
+  dirty = Boolean(savedDraft?.dirty);
   const cycle = client.trainingCycles?.find((item) => item.id === client.activeCycleId);
-  routine = structuredClone(existing ? existing.routine : cycle?.routine);
-  cycleId = existing ? existing.cycleId : cycle?.id;
+  const seed = savedDraft?.payload ?? existing ?? options.capture;
+  routine = structuredClone(seed ? seed.routine : cycle?.routine);
+  cycleId = seed ? seed.cycleId : cycle?.id;
   definitions = blockDefinitions(routine);
   blockPicker.replaceChildren(...definitions.map(([id, label]) => new Option(label, id)));
-  followup = structuredClone(existing?.followup ?? { recovery: "", notes: "", loads: {}, feedback: {}, sources: {} });
+  followup = structuredClone(seed?.followup ?? { recovery: "", notes: "", loads: {}, feedback: {}, sources: {} });
   followup.loads ??= {}; followup.feedback ??= {}; followup.sources ??= {};
-  draft = structuredClone(existing?.blocks ?? {});
+  draft = structuredClone(seed?.blocks ?? {});
   for (const [id, values] of Object.entries(draft)) {
     if (hasRounds(id) && !values.rounds) {
       draft[id] = { rounds: Array.from({ length: routine?.blocks.find((block) => block.id === id)?.rounds ?? roundDefault(id) }, (_, index) => index === 0 ? values : {}) };
     }
   }
-  dateInput.value = existing?.date ?? today();
-  if (!existing && cycleId) followup.loads = latestLoads(client.emsSessions ?? [], currentSession());
+  dateInput.value = seed?.date ?? today();
+  if (!existing && !savedDraft && cycleId) followup.loads = latestLoads(client.emsSessions ?? [], currentSession());
   byId("training-recovery").value = followup.recovery ?? "";
   byId("training-notes").value = followup.notes ?? "";
   byId("training-session-label").textContent = routine ? routine.title + " · copia de la rutina del ciclo" : "Registro sin rutina vinculada";
-  activeBlock = definitions.find(([id]) => draft[id])?.[0] ?? definitions[0][0];
-  activeRound = 0;
+  activeBlock = options.review?.block ?? savedDraft?.selection?.block ?? definitions.find(([id]) => draft[id])?.[0] ?? definitions[0][0];
+  if (!definitions.some(([id]) => id === activeBlock)) activeBlock = definitions[0][0];
+  activeRound = options.review?.round ?? savedDraft?.selection?.round ?? 0;
+  for (const [block, round] of savedDraft?.selection?.rounds ?? []) roundSelections.set(block, round);
+  ensureBlock();
+  if (hasRounds(activeBlock)) activeRound = Math.min(activeRound, draft[activeBlock].rounds.length - 1);
+  else activeRound = 0;
+  for (const [key, photoId] of savedDraft?.photoIds ?? []) {
+    const photo = await getLocalPhoto(photoId);
+    if (token !== viewVersion || editingClientId !== client.id || !dialog.open) return;
+    if (photo && photo.clientId === client.id) { photoIds.set(key, photoId); referencePhotos.set(key, localPhotoUrl(photo)); }
+  }
+  reviewContext = options.review ?? null;
+  if (!reviewContext && savedDraft?.review) {
+    const photo = await getLocalPhoto(savedDraft.review.photoId);
+    const capture = (await listCaptures(client.id)).find((item) => item.id === savedDraft.review.captureId);
+    if (token !== viewVersion || editingClientId !== client.id || !dialog.open) return;
+    if (photo && capture) reviewContext = { photo, capture, block: activeBlock, round: activeRound };
+  }
+  if (token !== viewVersion || editingClientId !== client.id || !dialog.open) return;
+  if (reviewContext) { reviewContext.url = localPhotoUrl(reviewContext.photo); photoIds.set(recordKey(), reviewContext.photo.id); }
   blockPicker.value = activeBlock;
-  error.hidden = true;
+  error.hidden = !conflict;
+  if (conflict) error.textContent = "La sesión guardada es más reciente. El borrador anterior se conserva aparte en «Continuar borrador».";
   scanStatus.textContent = "";
   scanRows.hidden = true;
   pendingScan = undefined;
   showBlock();
   overview.hidden = true;
   form.hidden = false;
+  preparingEditor = false;
+  byId("stored-photo-actions").hidden = !reviewContext;
+  byId("finish-ems-session").hidden = Boolean(reviewContext);
+  document.querySelector(".ems-photo-actions").hidden = Boolean(reviewContext);
+  saveButton.textContent = reviewContext ? "Guardar foto revisada" : "Guardar sesión";
+  cancelButton.textContent = reviewContext ? "Volver a las fotos" : "Volver";
+  void persistEditor();
   dateInput.focus();
+  if (options.readPhoto && reviewContext) try { await readStoredPhoto(); } catch (failure) { error.textContent = failure.message; error.hidden = false; }
 }
 
 export function openEmsPanel(selectedClient, updateClient) {
@@ -470,21 +580,53 @@ export function openEmsPanel(selectedClient, updateClient) {
   onSave = updateClient;
   byId("ems-client").textContent = client.name + " · " + clientCode(client.id);
   feedback.textContent = "";
+  document.querySelector(".ems-more-options").open = false;
   showOverview();
   dialog.showModal();
 }
 
-newButton.addEventListener("click", () => editSession());
+newButton.addEventListener("click", async () => {
+  const pending = (await listLocalDrafts(client.id)).find((item) => item.dirty && !item.baseRevision && item.payload.date === today());
+  if (pending) await openDraft(pending); else await editSession();
+});
+byId("new-photo-session").addEventListener("click", async () => {
+  const capture = (await listCaptures(client.id)).find((item) => item.date === today());
+  await inbox(capture);
+});
 byId("open-training-cycle").addEventListener("click", () => openCycleEditor(client, (updated) => { client = updated; onSave(client); showOverview(); feedback.textContent = "Ciclo preparado. Pulsa Iniciar sesión."; }));
 byId("open-training-report").addEventListener("click", () => { void openTrainingReport(client); });
-byId("close-ems").addEventListener("click", () => dialog.close());
-cancelButton.addEventListener("click", () => {
-  showOverview();
-  newButton.focus();
+byId("close-ems").addEventListener("click", () => { activeWork(null); dialog.close(); });
+cancelButton.addEventListener("click", async () => {
+  await persistEditor();
+  const capture = reviewContext?.capture;
+  activeWork(null);
+  await showOverview();
+  if (capture) await inbox(capture);
 });
 dialog.addEventListener("cancel", (event) => {
   if (saveButton.disabled) event.preventDefault();
+  else { void persistEditor(); activeWork(null); }
 });
+dialog.addEventListener("close", () => { releaseLocalImages(); preparingEditor = false; });
+form.addEventListener("input", () => { void persistEditor(true); });
+form.addEventListener("change", () => { void persistEditor(true); });
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") void persistEditor(); });
+window.addEventListener("pagehide", () => { void persistEditor(); });
+
+export async function resumeEmsWork(clients, updateClient) {
+  const resume = activeWork(); if (!resume) return;
+  const selected = clients.find((item) => item.id === resume.clientId);
+  if (!selected || document.querySelector("dialog[open]")) return;
+  openEmsPanel(selected, updateClient);
+  if (resume.mode === "photos") {
+    const capture = (await listCaptures(selected.id)).find((item) => item.id === resume.captureId);
+    const cycle = selected.trainingCycles?.find((item) => item.id === selected.activeCycleId);
+    await inbox(capture ?? { id: resume.captureId, clientId: selected.id, date: resume.date ?? today(), photoCount: 0, reviewedCount: 0, ...(cycle ? { routine: structuredClone(cycle.routine), cycleId: cycle.id } : {}) });
+  } else if (resume.mode === "editor") {
+    const record = await readLocalDraft(resume.id);
+    if (record) await openDraft(record);
+  }
+}
 
 blockPicker.addEventListener("change", () => {
   rememberBlock();
@@ -541,6 +683,7 @@ function scanStillOpen(job) {
 
 function clearBlock() {
   if (saveButton.disabled) return;
+  dirty = true;
   const key = recordKey();
   const label = recordLabel();
   scanVersions.set(key, (scanVersions.get(key) ?? 0) + 1);
@@ -564,6 +707,7 @@ function fillFromScan(job, values) {
   Object.assign(target, Object.fromEntries(untouched));
   const label = recordLabel(job.block, job.round);
   const count = untouched.length;
+  dirty = true;
   if (count) followup.sources[recordId(job.block, job.round)] = { method: "photo", reviewed: false };
   scanMessage(job, count
     ? count + " de " + inputs.size + " campos rellenados en " + label + ". Revisa los valores antes de guardar."
@@ -572,6 +716,7 @@ function fillFromScan(job, values) {
   pendingScan = undefined;
   if (jobIsSelected(job)) showBlock();
   else updateRoundOptions();
+  void persistEditor();
 }
 
 function scanJob() {
@@ -616,6 +761,20 @@ async function runScan(job, read) {
   }
 }
 
+async function readStoredPhoto() {
+  if (!reviewContext || takePhoto.disabled) return;
+  const photo = reviewContext.photo, job = scanJob();
+  photoIds.set(recordKey(), photo.id);
+  await persistEditor();
+  if (!scanStillOpen(job)) return;
+  const image = await cropEmsPhoto(photo.blob);
+  if (!image || !scanStillOpen(job)) return;
+  referencePhotos.set(recordKey(job.block, job.round), image.toDataURL("image/jpeg", .88));
+  if (jobIsSelected(job)) showBlock();
+  await runScan(job, () => readWiemsImage(image));
+}
+byId("read-stored-photo").addEventListener("click", () => { void readStoredPhoto().catch((failure) => { error.textContent = failure.message; error.hidden = false; }); });
+
 for (const [button, input] of [[takePhoto, byId("ems-camera-file")], [choosePhoto, byId("ems-photo-file")]]) {
   button.addEventListener("click", () => {
     photoJob = scanJob();
@@ -628,6 +787,12 @@ for (const [button, input] of [[takePhoto, byId("ems-camera-file")], [choosePhot
     photoJob = undefined;
     if (!file || !job || !scanStillOpen(job)) return;
     try {
+      const result = await appendCapturePhoto(client, { id: workId, clientId: client.id, date: dateInput.value,
+        ...(routine ? { routine: structuredClone(routine) } : {}), ...(cycleId ? { cycleId } : {}) }, file);
+      if (!scanStillOpen(job)) return;
+      photoIds.set(recordKey(job.block, job.round), result.photo.id);
+      dirty = true;
+      await persistEditor();
       const image = await cropEmsPhoto(file);
       if (!image || !scanStillOpen(job)) return;
       referencePhotos.set(recordKey(job.block, job.round), image.toDataURL("image/jpeg", .88));
@@ -648,6 +813,7 @@ scanRow.addEventListener("change", () => {
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
   if (saveButton.disabled) return;
+  const flushed = persistEditor();
   saveButton.disabled = true;
   byId("finish-ems-session").disabled = true;
   cancelButton.disabled = true;
@@ -655,16 +821,29 @@ form.addEventListener("submit", async (event) => {
   error.hidden = true;
   rememberBlock();
   try {
+    await flushed;
+    if (reviewContext && !hasValues(inputValues())) throw new Error("Introduce o lee al menos un valor de esta foto antes de marcarla como revisada. La foto y el borrador siguen guardados.");
     const showReport = event.submitter?.id === "finish-ems-session";
+    if (reviewContext && followup.sources[recordKey()]) followup.sources[recordKey()].reviewed = true;
     const before = new Set((client.emsSessions ?? []).map((item) => item.id));
     followup.completed = showReport || Boolean(followup.completed);
     client = await saveEmsSession(currentSession(), client, session);
     const saved = client.emsSessions?.find((item) => session ? item.id === session.id : !before.has(item.id));
+    const reviewed = reviewContext;
+    session = saved ?? null;
+    if (reviewed) await markPhotoReviewed(reviewed.photo, activeBlock, activeRound);
+    else for (const [key, photoId] of photoIds) {
+      const source = followup.sources[key];
+      if (source?.reviewed) { const photo = await getLocalPhoto(photoId); if (photo) { const [block, round] = key.split(":"); await markPhotoReviewed(photo, block, Number(round)); } }
+    }
+    await removeLocalDraft(draftId(client.id, workId));
+    activeWork(null);
     onSave(client);
-    showOverview();
+    await showOverview();
     feedback.textContent = "Intensidades guardadas.";
     newButton.focus();
     if (showReport && saved) await openTrainingReport(client, saved.id);
+    if (reviewed) await inbox((await listCaptures(client.id)).find((item) => item.id === reviewed.capture.id));
   } catch (failure) {
     error.textContent = failure.message || "No se han podido guardar las intensidades.";
     error.hidden = false;

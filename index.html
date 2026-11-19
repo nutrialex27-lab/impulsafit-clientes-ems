@@ -18,7 +18,7 @@
       <div class="brand">
         <img class="brand-mark" src="./icon-192.png?v=7" alt="" width="38" height="38">
         <span>Registro EMS</span>
-        <small class="brand-version" id="app-version">v22</small>
+        <small class="brand-version" id="app-version">v23</small>
       </div>
       <nav aria-label="Herramientas">
         <button class="top-action" id="backups-button" type="button">Copias</button>
@@ -120,27 +120,30 @@
 
   <dialog class="ems-dialog" id="ems-dialog" aria-labelledby="ems-title">
     <div class="dialog-heading">
-      <h2 id="ems-title">Intensidades EMS</h2>
+      <h2 id="ems-title">Sesiones EMS</h2>
       <p class="dialog-caption ems-client" id="ems-client"></p>
     </div>
 
     <section id="ems-overview" aria-labelledby="ems-history-title">
-      <div class="training-cycle-card" id="training-cycle-card"></div>
-      <div class="training-actions"><button class="button secondary" id="open-training-cycle" type="button">Plan de cuatro semanas</button><button class="button secondary" id="open-training-report" type="button">Ver evolución</button></div>
+      <button class="button primary inbox-start" id="new-photo-session" type="button">Fotos de la sesión</button>
+      <p class="training-help">Guarda las fotos ahora o añádelas juntas al terminar. Revisa los valores cuando estés tranquilo.</p>
+      <div id="ems-drafts"></div>
       <div class="ems-history-heading">
         <h3 id="ems-history-title">Sesiones</h3>
-        <button class="button primary" id="new-ems-session" type="button">Iniciar sesión</button>
       </div>
-      <p class="ems-empty" id="ems-empty">Aún no hay sesiones de intensidades.</p>
+      <p class="ems-empty" id="ems-empty">Aún no hay sesiones guardadas.</p>
       <ul class="ems-history" id="ems-history"></ul>
       <p class="ems-history-hint" id="ems-history-hint" hidden>Mantén pulsada una fecha para eliminar la sesión.</p>
       <p class="feedback" id="ems-feedback" role="status"></p>
+      <details class="ems-more-options"><summary>Más opciones</summary><div class="training-cycle-card" id="training-cycle-card"></div><div class="training-actions"><button class="button secondary" id="new-ems-session" type="button">Registro manual</button><button class="button secondary" id="open-training-cycle" type="button">Plan de cuatro semanas</button><button class="button secondary" id="open-training-report" type="button">Ver evolución</button></div></details>
       <div class="dialog-actions">
         <button class="button secondary" id="close-ems" type="button">Volver a clientes</button>
       </div>
     </section>
 
     <form id="ems-form" hidden>
+      <p class="ems-autosave" id="ems-autosave" role="status">Preparando borrador…</p>
+      <div class="stored-photo-actions" id="stored-photo-actions" hidden><p>Revisa la foto y sus valores. Al guardar confirmas este registro.</p><button class="button secondary" id="read-stored-photo" type="button">Leer de nuevo esta foto</button></div>
       <p class="training-session-label" id="training-session-label"></p>
       <label class="ems-field training-recovery"><span>Cómo llega hoy</span><select id="training-recovery"><option value="">Comprobar recuperación</option><option value="good">Recuperado, sin molestias</option><option value="tired">Fatiga o recuperación incompleta</option><option value="discomfort">Molestias o malestar por valorar</option></select></label>
       <div class="ems-controls">
@@ -199,9 +202,10 @@
       </div><label class="ems-field"><span>Sensación de corriente · 0 a 10, opcional</span><input id="training-sensation" type="number" min="0" max="10" step="0.5"></label><details><summary>Percepción por zona</summary><div class="training-zone-fields" id="training-zones"></div></details></div></details>
       <aside class="training-suggestion" id="training-suggestion" aria-live="polite"></aside>
       <label class="ems-field training-notes"><span>Notas de la sesión · opcional</span><textarea id="training-notes" rows="2" maxlength="2000"></textarea></label>
+      <details class="ems-extra-options" id="ems-extra-options"><summary>Cargas y seguimiento · opcional</summary><div id="ems-extra-fields"></div></details>
       <p class="form-error" id="ems-error" role="alert" hidden></p>
       <div class="dialog-actions">
-        <button class="button secondary" id="cancel-ems-session" type="button">Cancelar</button>
+        <button class="button secondary" id="cancel-ems-session" type="button">Volver</button>
         <button class="button primary" id="save-ems-session" type="submit">Guardar sesión</button>
         <button class="button primary" id="finish-ems-session" type="submit">Guardar y ver informe</button>
       </div>
@@ -213,7 +217,7 @@
       <h2 id="ems-session-actions-title">Eliminar sesión</h2>
       <p class="dialog-caption" id="ems-session-actions-date"></p>
     </div>
-    <p id="ems-session-actions-description">Se eliminarán los valores de todos los bloques de esta sesión.</p>
+    <p id="ems-session-actions-description">Se eliminarán las fotos, el borrador y los valores de esta sesión.</p>
     <p class="form-error" id="ems-delete-error" role="alert" hidden></p>
     <div class="dialog-actions">
       <button class="button secondary" id="cancel-ems-delete" type="button" autofocus>Cancelar</button>
@@ -247,7 +251,7 @@
   <dialog id="backups-dialog" aria-labelledby="backups-title">
     <div class="dialog-heading">
       <h2 id="backups-title">Copias de seguridad</h2>
-      <p class="dialog-caption">Tus fichas se guardan en este dispositivo. Usa una copia para trasladarlas a otro.</p>
+      <p class="dialog-caption">Incluye las fichas, valores, fotos guardadas y borradores de este dispositivo. Usa una copia para trasladarlos a otro.</p>
     </div>
     <div class="backup-actions">
       <button class="button secondary" id="export-backup" type="button">Descargar copia</button>

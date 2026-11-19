@@ -1,5 +1,6 @@
 import { readSession, validDate } from "./ems-sessions.js";
 import { hasSessionData, readCycle, readTrainingDetails } from "./ems-training.js";
+import { localTransaction, deleteIndexedRecords, removeFastDraft, removeFastDrafts } from "./ems-storage.js";
 
 export const statuses = Object.freeze(["Activo", "En pausa", "Baja"]);
 export const goals = Object.freeze([
@@ -11,55 +12,9 @@ export const goals = Object.freeze([
   "Otro",
 ]);
 
-const storeName = "clientes";
-const databaseName = "impulsafit-clientes-ems:" + new URL("./", import.meta.url).pathname;
 const backupFormat = "impulsafit-clientes-ems";
-let openConnection;
-
-function database() {
-  if (openConnection) return openConnection;
-
-  openConnection = new Promise((resolve, reject) => {
-    const request = indexedDB.open(databaseName, 1);
-    request.onupgradeneeded = () => {
-      request.result.createObjectStore(storeName, { keyPath: "id", autoIncrement: true });
-    };
-    request.onerror = () => reject(request.error);
-    request.onsuccess = () => {
-      const connection = request.result;
-      connection.onversionchange = () => {
-        connection.close();
-        openConnection = undefined;
-      };
-      resolve(connection);
-    };
-  }).catch((error) => {
-    openConnection = undefined;
-    throw error;
-  });
-  return openConnection;
-}
-
-async function transaction(mode, work) {
-  const connection = await database();
-  return new Promise((resolve, reject) => {
-    const tx = connection.transaction(storeName, mode);
-    let result;
-    let failure;
-    const setResult = (value) => { result = value; };
-    const abort = (error) => {
-      failure = error;
-      tx.abort();
-    };
-
-    tx.oncomplete = () => resolve(result);
-    tx.onabort = () => reject(failure ?? tx.error ?? new Error("No se pudo guardar el cambio."));
-    try {
-      work(tx.objectStore(storeName), setResult, abort);
-    } catch (error) {
-      abort(error);
-    }
-  });
+function transaction(mode, work, extra = []) {
+  return localTransaction(["clients", ...extra], mode, (stores, done, abort) => work(stores.clients, done, abort, stores));
 }
 
 export function today() {
@@ -120,8 +75,8 @@ export function saveClient(values, previous) {
   });
 }
 
-export function deleteClient(previous) {
-  return transaction("readwrite", (store, setResult, abort) => {
+export async function deleteClient(previous) {
+  const result = await transaction("readwrite", (store, setResult, abort, stores) => {
     const request = store.get(previous.id);
     request.onsuccess = () => {
       const current = request.result;
@@ -137,9 +92,12 @@ export function deleteClient(previous) {
         return;
       }
       store.delete(previous.id);
+      for (const name of ["captures", "photos", "drafts"]) deleteIndexedRecords(stores[name], "clientId", previous.id);
       setResult(previous.id);
     };
-  });
+  }, ["captures", "photos", "drafts"]);
+  removeFastDrafts(previous.id);
+  return result;
 }
 
 export function saveEmsSession(fields, client, previous) {
@@ -147,9 +105,10 @@ export function saveEmsSession(fields, client, previous) {
   const session = {
     ...readSession({ ...fields, routine: details.routine }, { allowEmpty: true }),
     ...details,
-    id: previous?.id ?? crypto.randomUUID(),
+    id: previous?.id ?? fields.id ?? crypto.randomUUID(),
     revision: crypto.randomUUID(),
   };
+  if (typeof session.id !== "string" || !/^[A-Za-z0-9_-]{1,120}$/.test(session.id)) throw new Error("Identificador de sesión inválido.");
   if (!previous && !hasSessionData(session)) throw new Error("Anota valores, confirma cargas o registra una valoración para guardar la sesión.");
   return transaction("readwrite", (store, setResult, abort) => {
     const request = store.get(client.id);
@@ -168,6 +127,7 @@ export function saveEmsSession(fields, client, previous) {
         }
       }
       const index = sessions.findIndex((stored) => stored.id === session.id);
+      if (!previous && index >= 0) { abort(new Error("Esta sesión ya se guardó desde otra ventana. Ábrela de nuevo; tu borrador se conserva.")); return; }
       if (previous && sessions[index]?.revision !== previous.revision) {
         abort(new Error("La sesión cambió desde que la abriste. Vuelve a abrirla antes de editar."));
         return;
@@ -200,8 +160,8 @@ export function saveTrainingCycle(fields, client) {
   });
 }
 
-export function deleteEmsSession(client, session) {
-  return transaction("readwrite", (store, setResult, abort) => {
+export async function deleteEmsSession(client, session) {
+  const result = await transaction("readwrite", (store, setResult, abort, stores) => {
     const request = store.get(client.id);
     request.onsuccess = () => {
       const current = request.result;
@@ -216,10 +176,31 @@ export function deleteEmsSession(client, session) {
         return;
       }
       const record = { ...current, emsSessions: sessions.filter((item) => item.id !== session.id) };
+      stores.captures.delete(session.id);
+      deleteIndexedRecords(stores.photos, "captureId", session.id);
+      stores.drafts.delete(client.id + ":" + session.id);
       store.put(record);
       setResult(record);
     };
-  });
+  }, ["captures", "photos", "drafts"]);
+  removeFastDraft(client.id, session.id);
+  return result;
+}
+
+export async function deleteCaptureSession(client, capture) {
+  const result = await transaction("readwrite", (store, done, abort, stores) => {
+    const r = store.get(client.id);
+    r.onsuccess = () => {
+      if (!r.result || r.result.revision !== client.revision || r.result.emsSessions?.some((session) => session.id === capture.id)) { abort(new Error("La ficha o la sesión cambió. Vuelve a abrir el cliente antes de eliminar.")); return; }
+      const c = stores.captures.get(capture.id);
+      c.onsuccess = () => {
+        if (!c.result || c.result.clientId !== client.id || c.result.updatedAt !== capture.updatedAt) { abort(new Error("Las fotos cambiaron. Vuelve a abrir la sesión antes de eliminar.")); return; }
+        stores.captures.delete(capture.id); deleteIndexedRecords(stores.photos, "captureId", capture.id); stores.drafts.delete(client.id + ":" + capture.id); done(r.result);
+      };
+    };
+  }, ["captures", "photos", "drafts"]);
+  removeFastDraft(client.id, capture.id);
+  return result;
 }
 
 export function encodeBackup(clients) {
@@ -245,7 +226,7 @@ function decodeSessions(sessions) {
 
 export function decodeBackup(contents) {
   const backup = JSON.parse(contents);
-  if (backup?.format !== backupFormat || ![1, 2, 3, 4].includes(backup.version) || !Array.isArray(backup.clients)) {
+  if (backup?.format !== backupFormat || ![1, 2, 3, 4, 5].includes(backup.version) || !Array.isArray(backup.clients)) {
     throw new Error("Selecciona una copia de seguridad de Clientes EMS.");
   }
   const ids = new Set();
@@ -271,15 +252,22 @@ export function decodeBackup(contents) {
   });
 }
 
-export function restoreBackup(clients) {
-  return transaction("readwrite", (store) => {
+export async function restoreBackup(clients, workspace = { drafts: [], captures: [], photos: [] }) {
+  await transaction("readwrite", (store, done, abort, stores) => {
     store.clear();
+    const revisions = new Map();
     for (const client of clients) {
       const emsSessions = (client.emsSessions ?? []).map((session) => ({
         ...session,
         revision: crypto.randomUUID(),
       }));
+      for (const session of emsSessions) revisions.set(client.id + ":" + session.id, session.revision);
       store.add({ ...client, revision: crypto.randomUUID(), emsSessions });
     }
-  });
+    for (const name of ["drafts", "captures", "photos"]) {
+      stores[name].clear();
+      for (const record of workspace[name]) stores[name].put(name === "drafts" && record.baseRevision && !record.conflicted ? { ...record, baseRevision: revisions.get(record.id) ?? record.baseRevision } : record);
+    }
+  }, ["drafts", "captures", "photos"]);
+  removeFastDrafts();
 }

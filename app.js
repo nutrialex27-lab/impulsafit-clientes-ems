@@ -10,8 +10,9 @@ import {
   statuses,
   today,
 } from "./client-store.js";
-import { openEmsPanel } from "./ems-panel.js";
+import { openEmsPanel, resumeEmsWork } from "./ems-panel.js";
 import { receivedRoutine, routineInbox } from "./ems-training.js";
+import { decodeLocalWork, exportLocalWork } from "./ems-local.js";
 
 const showRoutineNotice = () => { document.getElementById("routine-inbox-notice").hidden = !receivedRoutine(); };
 showRoutineNotice();
@@ -288,7 +289,10 @@ byId("close-backups").addEventListener("click", () => backupDialog.close());
 byId("export-backup").addEventListener("click", async () => {
   announce(backupError);
   try {
-    const data = encodeBackup(await listClients());
+    const roster = await listClients();
+    const workspace = await exportLocalWork();
+    for (const draft of workspace.drafts) draft.conflicted = Boolean(draft.baseRevision && roster.find((client) => client.id === draft.clientId)?.emsSessions?.find((session) => session.id === draft.sessionId)?.revision !== draft.baseRevision);
+    const data = JSON.stringify({ ...JSON.parse(encodeBackup(roster)), version: 5, workspace });
     const url = URL.createObjectURL(new Blob([data], { type: "application/json" }));
     const link = document.createElement("a");
     link.href = url;
@@ -311,11 +315,12 @@ backupInput.addEventListener("change", async () => {
   announce(backupError);
   if (!file) return;
   try {
-    const decoded = decodeBackup(await file.text());
+    const contents = await file.text(), decoded = decodeBackup(contents);
+    const workspace = decodeLocalWork(JSON.parse(contents).workspace, decoded);
     if (backupInput.files[0] !== file || !backupDialog.open) return;
-    pendingBackup = decoded;
+    pendingBackup = { clients: decoded, workspace };
     const description = decoded.length + (decoded.length === 1 ? " ficha." : " fichas.");
-    announce(backupSummary, "La copia contiene " + description + " Al restaurarla se sustituirán las fichas de este dispositivo.");
+    announce(backupSummary, "La copia contiene " + description + " " + workspace.photos.length + (workspace.photos.length === 1 ? " foto y " : " fotos y ") + workspace.drafts.length + (workspace.drafts.length === 1 ? " borrador." : " borradores.") + " Al restaurarla se sustituirán las fichas, fotos y borradores de este dispositivo.");
     restoreButton.hidden = false;
   } catch (error) {
     const message = error instanceof SyntaxError ? "El archivo seleccionado no es una copia válida." : error.message;
@@ -328,7 +333,7 @@ restoreButton.addEventListener("click", async () => {
   restoreButton.disabled = true;
   announce(backupError);
   try {
-    await restoreBackup(pendingBackup);
+    await restoreBackup(pendingBackup.clients, pendingBackup.workspace);
     pendingBackup = null;
     backupDialog.close();
     search.value = "";
@@ -376,10 +381,10 @@ installButton.addEventListener("click", async () => {
 });
 
 if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("./sw.js?v=22", { updateViaCache: "none" }).catch((error) => {
+  navigator.serviceWorker.register("./sw.js?v=23", { updateViaCache: "none" }).catch((error) => {
     console.warn("No se pudo preparar el uso sin conexión.", error);
   });
 }
 
 window.addEventListener("focus", () => { void refreshList(); });
-void refreshList();
+void refreshList().then(() => resumeEmsWork(clients, refreshList)).catch((error) => announce(directoryError, "No se pudo recuperar la última pantalla. Tus fotos y borradores siguen disponibles en el cliente. " + error.message));
