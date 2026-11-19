@@ -199,7 +199,7 @@ export function encodeBackup(clients) {
     ...client,
     emsSessions: emsSessions.map(({ revision: sessionRevision, ...session }) => session),
   }));
-  return JSON.stringify({ format: backupFormat, version: 2, clients: records }, null, 2);
+  return JSON.stringify({ format: backupFormat, version: 3, clients: records }, null, 2);
 }
 
 function decodeSessions(sessions) {
@@ -216,7 +216,7 @@ function decodeSessions(sessions) {
 
 export function decodeBackup(contents) {
   const backup = JSON.parse(contents);
-  if (backup?.format !== backupFormat || ![1, 2].includes(backup.version) || !Array.isArray(backup.clients)) {
+  if (backup?.format !== backupFormat || ![1, 2, 3].includes(backup.version) || !Array.isArray(backup.clients)) {
     throw new Error("Selecciona una copia de seguridad de Clientes EMS.");
   }
   const ids = new Set();
@@ -229,7 +229,7 @@ export function decodeBackup(contents) {
       throw new Error("La copia contiene una fecha de alta inválida.");
     }
     ids.add(id);
-    const emsSessions = backup.version === 2 ? decodeSessions(client.emsSessions) : [];
+    const emsSessions = backup.version >= 2 ? decodeSessions(client.emsSessions) : [];
     return { ...readFields(client), id, joinedOn, emsSessions };
   });
 }

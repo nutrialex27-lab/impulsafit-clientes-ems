@@ -1,5 +1,5 @@
 import { clientCode, deleteEmsSession, saveEmsSession, today } from "./client-store.js";
-import { blocks, channels } from "./ems-sessions.js";
+import { blocks, channels, defaultRoundCounts, hasRounds, maxRounds } from "./ems-sessions.js";
 import { readWiemsImage } from "./ems-ocr.js";
 import { cropEmsPhoto } from "./ems-photo.js";
 
@@ -10,6 +10,10 @@ const form = byId("ems-form");
 const history = byId("ems-history");
 const dateInput = byId("ems-date");
 const blockPicker = byId("ems-block");
+const roundsSection = byId("ems-rounds");
+const roundCount = byId("ems-round-count");
+const roundPicker = byId("ems-round");
+const roundSummary = byId("ems-round-summary");
 const saveButton = byId("save-ems-session");
 const cancelButton = byId("cancel-ems-session");
 const newButton = byId("new-ems-session");
@@ -34,12 +38,45 @@ let onSave;
 let session;
 let draft;
 let activeBlock;
+let activeRound = 0;
 let pendingScan;
 let photoJob;
 let deleteTarget;
 let deleteTrigger;
 const referencePhotos = new Map();
 const scanVersions = new Map();
+const scanMessages = new Map();
+const roundSelections = new Map();
+
+const recordKey = (block = activeBlock, round = activeRound) => block + ":" + round;
+const hasValues = (values) => Object.values(values).some((value) => value != null && String(value).trim() !== "");
+const inputValues = () => Object.fromEntries([...inputs].map(([key, input]) => [key, input.value]));
+
+function ensureBlock() {
+  draft[activeBlock] ??= hasRounds(activeBlock)
+    ? { rounds: Array.from({ length: defaultRoundCounts[activeBlock] }, () => ({})) } : {};
+}
+
+function recordValues(block = activeBlock, round = activeRound) {
+  return hasRounds(block) ? draft[block].rounds[round] : draft[block];
+}
+
+function setRecordValues(values, block = activeBlock, round = activeRound) {
+  if (hasRounds(block)) draft[block].rounds[round] = values;
+  else draft[block] = values;
+}
+
+function recordLabel(block = activeBlock, round = activeRound) {
+  const label = blocks.find(([id]) => id === block)[1];
+  return label + (hasRounds(block) ? " · vuelta " + (round + 1) : "");
+}
+
+const jobIsSelected = (job) => recordKey() === recordKey(job.block, job.round);
+
+function scanMessage(job, message) {
+  scanMessages.set(recordKey(job.block, job.round), message);
+  if (jobIsSelected(job)) scanStatus.textContent = message;
+}
 
 function addInput(container, id, label) {
   const field = document.createElement("label");
@@ -178,33 +215,67 @@ deleteConfirm.addEventListener("click", async () => {
 });
 
 function showBlock() {
+  ensureBlock();
+  const multiple = hasRounds(activeBlock);
+  roundsSection.hidden = !multiple;
+  roundCount.disabled = saveButton.disabled || !multiple;
+  roundPicker.disabled = saveButton.disabled || !multiple;
+  if (multiple) roundCount.value = draft[activeBlock].rounds.length;
   for (const [key, input] of inputs) {
-    const value = draft[activeBlock]?.[key];
+    const value = recordValues()[key];
     input.value = typeof value === "number" ? String(value).replace(".", ",") : value ?? "";
   }
-  const reference = referencePhotos.get(activeBlock);
+  const reference = referencePhotos.get(recordKey());
   photoReference.hidden = !reference;
+  photoReference.querySelector("summary").textContent = multiple
+    ? "Foto de la vuelta " + (activeRound + 1) + " para revisar los valores" : "Foto del bloque para revisar los valores";
   if (reference) referenceImage.src = reference;
   else referenceImage.removeAttribute("src");
+  scanStatus.textContent = scanMessages.get(recordKey()) ?? "";
+  scanRows.hidden = !pendingScan || !jobIsSelected(pendingScan.job) || !scanStillOpen(pendingScan.job);
+  resetValues.setAttribute("aria-label", "Reset valores de " + recordLabel());
   updateBlockActions();
 }
 
+function updateRoundOptions() {
+  if (!hasRounds(activeBlock)) return;
+  const readings = draft[activeBlock].rounds;
+  let recorded = 0;
+  roundPicker.replaceChildren();
+  readings.forEach((values, index) => {
+    const current = index === activeRound ? inputValues() : values;
+    const count = Object.values(current).filter((value) => value != null && String(value).trim() !== "").length;
+    if (count) recorded++;
+    roundPicker.add(new Option("Vuelta " + (index + 1) + " · " + (count ? count + "/11 campos" : "sin valores"), String(index)));
+  });
+  roundPicker.value = String(activeRound);
+  roundSummary.textContent = recorded + " de " + readings.length + " vueltas con valores. Cada vuelta guarda sus canales y su máster.";
+}
+
 function updateBlockActions() {
-  const hasValues = [...inputs.values()].some((input) => input.value.trim() !== "");
-  resetValues.disabled = saveButton.disabled || (!hasValues && !referencePhotos.has(activeBlock));
+  resetValues.disabled = saveButton.disabled || (!hasValues(inputValues()) && !referencePhotos.has(recordKey()));
+  updateRoundOptions();
 }
 
 function rememberBlock() {
-  draft[activeBlock] = Object.fromEntries([...inputs].map(([key, input]) => [key, input.value]));
+  setRecordValues(inputValues());
 }
 
 function editSession(existing = null) {
   referencePhotos.clear();
   scanVersions.clear();
+  scanMessages.clear();
+  roundSelections.clear();
   session = existing;
-  draft = { ...existing?.blocks };
+  draft = structuredClone(existing?.blocks ?? {});
+  for (const [id, values] of Object.entries(draft)) {
+    if (hasRounds(id) && !values.rounds) {
+      draft[id] = { rounds: Array.from({ length: defaultRoundCounts[id] }, (_, index) => index === 0 ? values : {}) };
+    }
+  }
   dateInput.value = existing?.date ?? today();
   activeBlock = blocks.find(([id]) => draft[id])?.[0] ?? blocks[0][0];
+  activeRound = 0;
   blockPicker.value = activeBlock;
   error.hidden = true;
   scanStatus.textContent = "";
@@ -238,62 +309,104 @@ dialog.addEventListener("cancel", (event) => {
 blockPicker.addEventListener("change", () => {
   rememberBlock();
   activeBlock = blockPicker.value;
+  activeRound = roundSelections.get(activeBlock) ?? 0;
+  error.hidden = true;
+  showBlock();
+});
+
+roundPicker.addEventListener("change", () => {
+  rememberBlock();
+  activeRound = Number(roundPicker.value);
+  roundSelections.set(activeBlock, activeRound);
+  error.hidden = true;
+  showBlock();
+});
+
+roundCount.addEventListener("change", () => {
+  rememberBlock();
+  const readings = draft[activeBlock].rounds;
+  const count = Number(roundCount.value);
+  let message;
+  if (!Number.isInteger(count) || count < 1 || count > maxRounds) {
+    message = "Introduce entre 1 y " + maxRounds + " vueltas.";
+  } else if (readings.slice(count).some(hasValues)) {
+    message = "Hay valores en las vueltas que quieres quitar. Vacía esas vueltas antes de reducir el número.";
+  }
+  if (message) {
+    roundCount.value = readings.length;
+    error.textContent = message;
+    error.hidden = false;
+    return;
+  }
+  for (let index = count; index < readings.length; index++) {
+    const key = recordKey(activeBlock, index);
+    scanVersions.set(key, (scanVersions.get(key) ?? 0) + 1);
+    referencePhotos.delete(key);
+    scanMessages.delete(key);
+  }
+  while (readings.length < count) readings.push({});
+  readings.length = count;
+  activeRound = Math.min(activeRound, count - 1);
+  roundSelections.set(activeBlock, activeRound);
+  error.hidden = true;
   showBlock();
 });
 
 function scanStillOpen(job) {
   return dialog.open && !form.hidden && draft === job.draft
-    && job.version === (scanVersions.get(job.block) ?? 0);
+    && job.version === (scanVersions.get(recordKey(job.block, job.round)) ?? 0)
+    && (!hasRounds(job.block) || job.round < draft[job.block].rounds.length);
 }
 
 function clearBlock() {
   if (saveButton.disabled) return;
-  const block = activeBlock;
-  const label = blocks.find(([id]) => id === block)[1];
-  scanVersions.set(block, (scanVersions.get(block) ?? 0) + 1);
-  referencePhotos.delete(block);
+  const key = recordKey();
+  const label = recordLabel();
+  scanVersions.set(key, (scanVersions.get(key) ?? 0) + 1);
+  referencePhotos.delete(key);
   scanRows.hidden = true;
-  pendingScan = undefined;
+  if (pendingScan && jobIsSelected(pendingScan.job)) pendingScan = undefined;
   error.hidden = true;
-  draft[block] = {};
+  setRecordValues({});
+  scanMessages.set(key, "Valores de " + label + " vaciados. Pulsa Guardar sesión para aplicar el cambio.");
   showBlock();
-  scanStatus.textContent = "Valores de " + label + " vaciados. Pulsa Guardar sesión para aplicar el cambio.";
 }
 
 resetValues.addEventListener("click", clearBlock);
 
 function fillFromScan(job, values) {
   if (!scanStillOpen(job)) return;
-  if (activeBlock === job.block) rememberBlock();
-  const target = draft[job.block];
+  if (jobIsSelected(job)) rememberBlock();
+  const target = recordValues(job.block, job.round);
   const untouched = Object.entries(values).filter(([id]) => target[id] === job.before[id]);
   Object.assign(target, Object.fromEntries(untouched));
-  if (activeBlock === job.block) showBlock();
-  const label = blockPicker.querySelector('[value="' + job.block + '"]').textContent;
+  const label = recordLabel(job.block, job.round);
   const count = untouched.length;
-  scanStatus.textContent = count
+  scanMessage(job, count
     ? count + " de " + inputs.size + " campos rellenados en " + label + ". Revisa los valores antes de guardar."
-    : "Se mantuvieron los valores que editaste durante la lectura.";
+    : "Se mantuvieron los valores que editaste durante la lectura.");
   scanRows.hidden = true;
   pendingScan = undefined;
+  if (jobIsSelected(job)) showBlock();
+  else updateRoundOptions();
 }
 
 function scanJob() {
   rememberBlock();
-  return { draft, block: activeBlock, before: { ...draft[activeBlock] }, version: scanVersions.get(activeBlock) ?? 0 };
+  return { draft, block: activeBlock, round: activeRound, before: { ...recordValues() }, version: scanVersions.get(recordKey()) ?? 0 };
 }
 
 async function runScan(job, read) {
   takePhoto.disabled = true;
   choosePhoto.disabled = true;
-  scanStatus.textContent = "Leyendo intensidades…";
+  scanMessage(job, "Leyendo intensidades de " + recordLabel(job.block, job.round) + "…");
   scanRows.hidden = true;
   pendingScan = undefined;
   try {
     const rows = await read();
     if (!scanStillOpen(job)) return;
     if (!rows.some((values) => Object.keys(values).length)) {
-      scanStatus.textContent = "No se han podido leer los valores. Ajusta el recorte para incluir los nombres de los canales, los números y el máster. También puedes completarlos a mano.";
+      scanMessage(job, "No se han podido leer los valores. Ajusta el recorte para incluir los nombres de los canales, los números y el máster. También puedes completarlos a mano.");
       return;
     }
     if (rows.length === 1) {
@@ -308,11 +421,11 @@ async function runScan(job, read) {
       option.disabled = count === 0;
       scanRow.add(option);
     }
-    scanRows.hidden = false;
-    scanStatus.textContent = "Se han detectado varias filas de valores.";
+    scanRows.hidden = !jobIsSelected(job);
+    scanMessage(job, "Se han detectado varias filas de valores en la foto de " + recordLabel(job.block, job.round) + ".");
   } catch {
     if (scanStillOpen(job)) {
-      scanStatus.textContent = "No se pudo completar la lectura. Comprueba la conexión para iniciar el lector o completa los valores a mano.";
+      scanMessage(job, "No se pudo completar la lectura. Comprueba la conexión para iniciar el lector o completa los valores a mano.");
     }
   } finally {
     takePhoto.disabled = false;
@@ -334,11 +447,11 @@ for (const [button, input] of [[takePhoto, byId("ems-camera-file")], [choosePhot
     try {
       const image = await cropEmsPhoto(file);
       if (!image || !scanStillOpen(job)) return;
-      referencePhotos.set(job.block, image.toDataURL("image/jpeg", .88));
-      if (activeBlock === job.block) { rememberBlock(); showBlock(); }
+      referencePhotos.set(recordKey(job.block, job.round), image.toDataURL("image/jpeg", .88));
+      if (jobIsSelected(job)) { rememberBlock(); showBlock(); }
       await runScan(job, () => readWiemsImage(image));
     } catch (failure) {
-      if (scanStillOpen(job)) scanStatus.textContent = failure.message;
+      if (scanStillOpen(job)) scanMessage(job, failure.message);
     }
   });
 }

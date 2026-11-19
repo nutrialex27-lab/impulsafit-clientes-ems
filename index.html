@@ -18,7 +18,7 @@
       <div class="brand">
         <img class="brand-mark" src="./icon-192.png?v=7" alt="" width="38" height="38">
         <span>Registro EMS</span>
-        <small class="brand-version" id="app-version">v19</small>
+        <small class="brand-version" id="app-version">v20</small>
       </div>
       <nav aria-label="Herramientas">
         <button class="top-action" id="backups-button" type="button">Copias</button>
@@ -148,6 +148,19 @@
           <select id="ems-block"></select>
         </label>
       </div>
+      <section class="ems-rounds" id="ems-rounds" aria-label="Registro por vueltas" hidden>
+        <div class="ems-controls">
+          <label class="ems-field">
+            <span>Vueltas del bloque</span>
+            <input id="ems-round-count" type="number" inputmode="numeric" min="1" max="100" step="1">
+          </label>
+          <label class="ems-field">
+            <span>Vuelta que registras</span>
+            <select id="ems-round"></select>
+          </label>
+        </div>
+        <p id="ems-round-summary" role="status"></p>
+      </section>
       <div class="ems-scan">
         <div class="ems-photo-actions">
           <button class="button primary" id="ems-take-photo" type="button">Hacer foto</button>
@@ -169,7 +182,7 @@
       <div class="ems-master" id="ems-master-field"></div>
       <h3 class="ems-channels-heading">Canales</h3>
       <div class="ems-channels" id="ems-channels"></div>
-      <div class="ems-block-actions" role="group" aria-label="Acciones del bloque seleccionado">
+      <div class="ems-block-actions" role="group" aria-label="Acciones del registro seleccionado">
         <button class="button secondary" id="reset-ems-values" type="button" disabled>Reset valores</button>
       </div>
       <p class="form-error" id="ems-error" role="alert" hidden></p>
