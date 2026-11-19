@@ -7,9 +7,9 @@ export const blocks = [
   ["coolDown", "Vuelta a la calma"],
 ];
 
-// Impulsagen's standard 35-minute session: 12 min full body, 5 min
-// core and 5 min metabolic, with 4, 2 and 2 exercises respectively.
-export const defaultRoundCounts = Object.freeze({ fullBody: 4, core: 4, metabolic: 3 });
+// Impulsagen's standard 35-minute session: strength 3 rounds,
+// full body 4, core 4 and metabolic 3. Each block remains adjustable.
+export const defaultRoundCounts = Object.freeze({ strength: 3, fullBody: 4, core: 4, metabolic: 3 });
 export const hasRounds = (blockId) => Object.hasOwn(defaultRoundCounts, blockId);
 export const maxRounds = 100;
 
