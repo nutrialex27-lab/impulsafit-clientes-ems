@@ -85,21 +85,8 @@ function digitsCrop(tile) {
   return crop;
 }
 
-export function masterBadgeCrop(frame, layout, row) {
-  const size = 160;
-  const scale = size / layout.step;
-  const center = layout.x + (channels.length + .12) * layout.step;
-  const top = row.y + layout.tilt * (center - layout.x) - .30 * layout.step;
-  const area = document.createElement("canvas");
-  area.width = Math.round(1.8 * size);
-  area.height = Math.round(1.4 * size);
-  const context = area.getContext("2d", { willReadFrequently: true });
-  context.fillStyle = "#fff";
-  context.fillRect(0, 0, area.width, area.height);
-  context.setTransform(scale, -scale * layout.tilt, 0, scale,
-    area.width / 2 - scale * center, scale * (layout.tilt * center - top));
-  context.drawImage(frame, 0, 0);
-  const pixels = context.getImageData(0, 0, area.width, area.height);
+function blueAreas(area) {
+  const pixels = area.getContext("2d").getImageData(0, 0, area.width, area.height);
   const mask = new Uint8Array(area.width * area.height);
   for (let index = 0; index < mask.length; index++) {
     const offset = index * 4;
@@ -108,7 +95,7 @@ export function masterBadgeCrop(frame, layout, row) {
     const blue = pixels.data[offset + 2];
     mask[index] = blue - red >= 8 && green - red >= 3 && red < 210 ? 1 : 0;
   }
-  const badges = [];
+  const components = [];
   for (let index = 0; index < mask.length; index++) {
     if (!mask[index]) continue;
     const queue = [index];
@@ -127,14 +114,12 @@ export function masterBadgeCrop(frame, layout, row) {
     }
     const width = right - left + 1;
     const height = bottom - upper + 1;
-    if (left > 0 && upper > 0 && right < area.width - 1 && bottom < area.height - 1
-      && width > .35 * size && width < 1.1 * size && height > .35 * size && height < 1.1 * size
-      && width / height > .65 && width / height < 1.5 && queue.length > .10 * size * size) {
-      badges.push({ left, upper, width, height });
-    }
+    components.push({ left, upper, width, height, count: queue.length });
   }
-  if (badges.length !== 1) return undefined;
-  const badge = badges[0];
+  return { pixels, components };
+}
+
+function badgeDigits(area, pixels, badge, thresholdRatio = .55) {
   // Read only the numeral in the blue circle, above its small mA label.
   const left = Math.round(badge.left + .08 * badge.width);
   const upper = Math.round(badge.upper + .10 * badge.height);
@@ -155,7 +140,7 @@ export function masterBadgeCrop(frame, layout, row) {
   const dark = values[Math.floor(values.length * .25)];
   const light = values[Math.floor(values.length * .95)];
   if (light - dark < 25) return undefined;
-  const threshold = dark + .55 * (light - dark);
+  const threshold = dark + thresholdRatio * (light - dark);
   const digits = document.createElement("canvas");
   digits.width = width; digits.height = height;
   const digitsContext = digits.getContext("2d");
@@ -175,6 +160,83 @@ export function masterBadgeCrop(frame, layout, row) {
   cropContext.fillRect(0, 0, crop.width, crop.height);
   cropContext.drawImage(digits, 16, 16, 192, crop.height - 32);
   return crop;
+}
+
+export function masterBadgeCrop(frame, layout, row) {
+  const size = 160;
+  const scale = size / layout.step;
+  const center = layout.x + (channels.length + .12) * layout.step;
+  const top = row.y + layout.tilt * (center - layout.x) - .30 * layout.step;
+  const area = document.createElement("canvas");
+  area.width = Math.round(1.8 * size);
+  area.height = Math.round(1.4 * size);
+  const context = area.getContext("2d", { willReadFrequently: true });
+  context.fillStyle = "#fff";
+  context.fillRect(0, 0, area.width, area.height);
+  context.setTransform(scale, -scale * layout.tilt, 0, scale,
+    area.width / 2 - scale * center, scale * (layout.tilt * center - top));
+  context.drawImage(frame, 0, 0);
+  const { pixels, components } = blueAreas(area);
+  const badges = components.filter(({ left, upper, width, height, count }) =>
+    left > 0 && upper > 0 && left + width < area.width && upper + height < area.height
+    && width > .35 * size && width < 1.1 * size && height > .35 * size && height < 1.1 * size
+    && width / height > .65 && width / height < 1.5 && count > .10 * size * size);
+  return badges.length === 1 ? badgeDigits(area, pixels, badges[0]) : undefined;
+}
+
+export function masterBadgeCrops(frame) {
+  const scale = Math.min(1, 1200 / frame.width);
+  const area = document.createElement("canvas");
+  area.width = Math.round(frame.width * scale);
+  area.height = Math.round(frame.height * scale);
+  area.getContext("2d").drawImage(frame, 0, 0, area.width, area.height);
+  const { components } = blueAreas(area);
+  const candidates = components.filter(({ left, upper, width, height, count }) =>
+    left > .45 * area.width && upper > 0 && left + width < area.width && upper + height < area.height
+    && width > .022 * area.width && width < .085 * area.width
+    && height > .022 * area.width && height < .085 * area.width
+    && width / height > .68 && width / height < 1.5 && count > .45 * width * height);
+  // The master badge is above and to the left of the client's other blue controls.
+  const badges = candidates.filter((badge) => !candidates.some((other) => other !== badge
+    && other.left + other.width / 2 < badge.left + badge.width / 2 - .3 * other.width
+    && other.upper + other.height / 2 < badge.upper + badge.height / 2 - .3 * other.height
+    && badge.upper - other.upper < 3 * Math.max(badge.height, other.height)));
+  return badges.sort((a, b) => a.upper - b.upper).flatMap((badge) => {
+    const detail = document.createElement("canvas");
+    detail.width = Math.round(badge.width / scale);
+    detail.height = Math.round(badge.height / scale);
+    const context = detail.getContext("2d", { willReadFrequently: true });
+    context.drawImage(frame, badge.left / scale, badge.upper / scale, badge.width / scale, badge.height / scale,
+      0, 0, detail.width, detail.height);
+    const fullSize = context.getImageData(0, 0, detail.width, detail.height);
+    const bounds = { left: 0, upper: 0, width: detail.width, height: detail.height };
+    const crop = badgeDigits(detail, fullSize, bounds, .75);
+    const fallbackCrop = badgeDigits(detail, fullSize, bounds);
+    return crop ? [{ crop, fallbackCrop, x: (badge.left + badge.width / 2) / scale,
+      y: (badge.upper + badge.height / 2) / scale, width: badge.width / scale }] : [];
+  });
+}
+
+async function readMasterBadges(worker, engine, frame) {
+  const results = [];
+  for (const badge of masterBadgeCrops(frame)) {
+    const readings = new Set();
+    for (const crop of [badge.crop, badge.fallbackCrop]) {
+      if (!crop) continue;
+      await worker.setParameters({ tessedit_pageseg_mode: engine.PSM.SINGLE_LINE,
+        tessedit_char_whitelist: "0123456789.," });
+      let result = await worker.recognize(crop, {}, { tsv: true });
+      let value = readMasterDigits(result.data.tsv);
+      if (value === undefined) {
+        await worker.setParameters({ tessedit_pageseg_mode: engine.PSM.SINGLE_WORD });
+        result = await worker.recognize(crop, {}, { tsv: true });
+        value = readMasterDigits(result.data.tsv);
+      }
+      if (value !== undefined) readings.add(value);
+    }
+    if (readings.size === 1) results.push({ ...badge, value: readings.values().next().value });
+  }
+  return results;
 }
 
 function startWorker(engine) {
@@ -238,8 +300,10 @@ export async function readWiemsImage(original) {
         await retry(angle);
       }
     }
-    const { layout, globalMaster } = scan;
-    if (!layout) return [];
+    const { layout } = scan;
+    masterFrame ??= detailCanvas(original, correctionAngle, true);
+    const masters = await readMasterBadges(worker, engine, masterFrame);
+    if (!layout) return masters.map(({ value }) => ({ master: value }));
     const inferred = scan.rows.length === 0;
     // The first Wiems PRO value line sits just below the channel headings.
     const rows = inferred ? [{ y: layout.y + .52 * layout.step, reads: new Map() }] : scan.rows;
@@ -268,9 +332,10 @@ export async function readWiemsImage(original) {
         }
         if (value !== undefined) values[id] = value;
       }
-      let master = row.master;
+      const nearby = masters.filter((badge) => rows.length === 1 && masters.length === 1
+        || Math.abs(badge.y - layout.tilt * (badge.x - layout.x) - row.y) < layout.step);
+      let master = nearby.length === 1 ? nearby[0].value : row.master;
       if (master === undefined) {
-        masterFrame ??= detailCanvas(original, correctionAngle, true);
         const badge = masterBadgeCrop(masterFrame, layout, row);
         if (badge) {
           await worker.setParameters({ tessedit_pageseg_mode: engine.PSM.SINGLE_LINE,
@@ -285,8 +350,10 @@ export async function readWiemsImage(original) {
         const result = await worker.recognize(tile, {}, { tsv: true });
         master = readMilliampCrop(result.data.tsv);
       }
-      if (master === undefined && rows.length === 1) master = globalMaster;
-      if (inferred && Object.keys(values).length < 3) continue;
+      if (inferred && Object.keys(values).length < 3) {
+        if (master !== undefined) results.push({ master });
+        continue;
+      }
       if (master !== undefined) values.master = master;
       results.push(values);
     }

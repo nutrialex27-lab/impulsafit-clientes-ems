@@ -371,7 +371,7 @@ installButton.addEventListener("click", async () => {
 });
 
 if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("./sw.js?v=18", { updateViaCache: "none" }).catch((error) => {
+  navigator.serviceWorker.register("./sw.js?v=19", { updateViaCache: "none" }).catch((error) => {
     console.warn("No se pudo preparar el uso sin conexión.", error);
   });
 }

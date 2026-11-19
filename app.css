@@ -60,6 +60,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   flex: none;
   border-radius: 9px;
 }
+.brand-version { color: #e0d4ec; font-size: .75rem; font-weight: 500; letter-spacing: 0; }
 .topbar nav { display: flex; align-items: center; gap: 8px; }
 .top-action {
   min-height: 42px;
