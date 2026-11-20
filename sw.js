@@ -1,6 +1,6 @@
 const scope = new URL(self.registration.scope);
 const cachePrefix = "impulsafit-ems:" + scope.pathname + ":";
-const cacheName = cachePrefix + "v23";
+const cacheName = cachePrefix + "v24";
 const ocrCacheName = "impulsafit-ocr:6.0.1:" + scope.pathname;
 const home = new URL("index.html", scope).href;
 const manifest = new URL("manifest.webmanifest", scope).href;
@@ -16,6 +16,7 @@ const assets = new Set([
   "ems-sessions.js",
   "ems-training.js",
   "ems-cycle.js",
+  "ems-assignment.js",
   "ems-progress.js",
   "ems-report.js",
   "ems-ocr.js",

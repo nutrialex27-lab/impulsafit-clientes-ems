@@ -28,9 +28,11 @@ Si en la foto aparecen varias filas de valores, selecciona la del cliente. El m�
 
 ## Uso e instalación
 
-### Ciclos, cargas e informes (v22)
+### Asignar rutinas, ciclos e informes (v24)
 
-En Impulsagen, prepara la rutina y pulsa **Usar en Registro EMS**. La copia enviada incluye los ejercicios y parámetros actuales, también los cambios que aún estén en los campos de edición. En la ficha del cliente abre **Plan de cuatro semanas**, revisa la rutina recibida y elige fecha de inicio, una o dos visitas semanales y experiencia del cliente. El ciclo conserva una copia fija: cambiar el generador después no modifica las sesiones. Para otro dispositivo usa **Archivo para Registro EMS** en el generador e importa el JSON en el plan del cliente.
+En Impulsagen, prepara la rutina y pulsa **Usar en Registro EMS**. Se abre directamente **Elegir cliente**; busca por nombre, móvil o código y selecciona su ficha. Revisa fecha de inicio, una o dos visitas semanales y experiencia, y pulsa **Asignar rutina**. La copia enviada incluye los ejercicios y parámetros actuales, también los cambios que aún estén en los campos de edición. Se guarda exclusivamente en el cliente elegido y deja de estar pendiente al confirmar. Si cancelas, puedes retomarla desde **Elegir cliente** en el listado; no se carga al abrir los planes de otros clientes. Si aún no hay fichas, puedes crear una desde el selector.
+
+El ciclo conserva una copia fija: cambiar el generador después no modifica las sesiones. El envío directo requiere usar ambas apps en el mismo navegador del dispositivo donde están sus fichas. Para otro dispositivo usa **Archivo para Registro EMS** en el generador e importa el JSON desde **Más opciones → Plan de cuatro semanas** del cliente correspondiente.
 
 **Iniciar sesión** recupera los ejercicios del ciclo y las últimas cargas confirmadas como referencias pendientes. Despliega **Ejercicios y cargas de este bloque** para introducir kg totales, kg por mancuerna, peso corporal, banda u otra carga. **Confirmar mismas cargas** confirma las referencias de toda la rutina; editar una carga confirma únicamente ese ejercicio. **Mismos mA** copia y confirma los valores de la vuelta anterior de hoy o, si no hay, de la misma vuelta de una sesión anterior comparable. Los campos nuevos siguen vacíos hasta introducir o confirmar datos. **Siguiente vuelta** agiliza el registro. Los bloques y vueltas proceden de la rutina; Activación y Vuelta a la calma mantienen una toma única. También se admiten bloques repetidos y bloques sin EMS.
 
@@ -55,7 +57,7 @@ Sirve la raíz del repositorio con un servidor local. Por ejemplo, ejecuta `pyth
 - `ems-panel.js` controla el historial y el formulario de intensidades. `ems-sessions.js` define los bloques, los canales y su validación.
 - `ems-ocr.js` y `wiems-values.js` leen la foto y alinean los números con los canales de Wiems PRO. Consulta `OCR-LICENSE.txt` para las versiones y licencias del motor.
 - `ems-photo.js` prepara la foto y permite ajustar el recorte antes de leerla.
-- `ems-training.js` valida las rutinas, ciclos y seguimientos; `ems-cycle.js` edita el ciclo. `ems-progress.js` prepara y dibuja los informes y `ems-report.js` permite seleccionarlos, descargarlos y compartirlos.
+- `ems-training.js` valida las rutinas, ciclos y seguimientos; `ems-assignment.js` elige el cliente de la rutina recibida y `ems-cycle.js` edita el ciclo. `ems-progress.js` prepara y dibuja los informes y `ems-report.js` permite seleccionarlos, descargarlos y compartirlos.
 - `ems-inbox.js` permite guardar fotos sin OCR y revisarlas después. `ems-local.js` conserva fotos y borradores; `ems-storage.js` gestiona la base local v2 y migra las fichas existentes sin borrarlas.
 - `manifest.webmanifest` y `sw.js` habilitan la instalación y el acceso sin conexión. Actualiza la versión de caché en `sw.js` al publicar cambios de la app.
 

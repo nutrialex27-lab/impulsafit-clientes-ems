@@ -13,10 +13,12 @@ import {
 import { openEmsPanel, resumeEmsWork } from "./ems-panel.js";
 import { receivedRoutine, routineInbox } from "./ems-training.js";
 import { decodeLocalWork, exportLocalWork } from "./ems-local.js";
+import { chooseRoutineClient } from "./ems-assignment.js";
 
 const showRoutineNotice = () => { document.getElementById("routine-inbox-notice").hidden = !receivedRoutine(); };
 showRoutineNotice();
 window.addEventListener("storage", (event) => { if (event.key === routineInbox) showRoutineNotice(); });
+window.addEventListener("ems-routine-assigned", showRoutineNotice);
 
 const byId = (id) => document.getElementById(id);
 const creator = byId("new-client");
@@ -46,6 +48,22 @@ let deleting = null;
 let deleteTrigger = null;
 let pendingBackup = null;
 let installPrompt = null;
+let creatingForRoutine = false;
+
+function startRoutineAssignment() {
+  return chooseRoutineClient({
+    assigned: (updated) => {
+      void refreshList(); showRoutineNotice(); openEmsPanel(updated, refreshList);
+      document.getElementById("ems-feedback").textContent = "Rutina asignada a " + updated.name + ".";
+    },
+    create: () => { creatingForRoutine = true; openEditor(); },
+  });
+}
+
+byId("choose-routine-client").addEventListener("click", () => { void startRoutineAssignment(); });
+window.addEventListener("hashchange", () => {
+  if (location.hash === "#rutina-recibida" && receivedRoutine()) void startRoutineAssignment().then((opened) => { if (opened) history.replaceState(null, "", location.pathname + location.search); });
+});
 
 function addOptions(select, values) {
   for (const value of values) select.add(new Option(value, value));
@@ -247,9 +265,10 @@ byId("clear-filters").addEventListener("click", () => {
   renderList();
   search.focus();
 });
-byId("cancel-client").addEventListener("click", () => editor.close());
+byId("cancel-client").addEventListener("click", () => { creatingForRoutine = false; editor.close(); });
 editor.addEventListener("cancel", (event) => {
   if (saveButton.disabled) event.preventDefault();
+  else creatingForRoutine = false;
 });
 
 form.addEventListener("submit", async (event) => {
@@ -269,6 +288,7 @@ form.addEventListener("submit", async (event) => {
     }
     await refreshList();
     announce(feedback, "Ficha " + clientCode(id) + (previous ? " actualizada." : " creada."));
+    if (creatingForRoutine && !previous) { creatingForRoutine = false; await startRoutineAssignment(); }
   } catch (error) {
     announce(clientError, error.message || "No se ha podido guardar la ficha.");
   } finally {
@@ -381,10 +401,16 @@ installButton.addEventListener("click", async () => {
 });
 
 if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("./sw.js?v=23", { updateViaCache: "none" }).catch((error) => {
+  navigator.serviceWorker.register("./sw.js?v=24", { updateViaCache: "none" }).catch((error) => {
     console.warn("No se pudo preparar el uso sin conexión.", error);
   });
 }
 
 window.addEventListener("focus", () => { void refreshList(); });
-void refreshList().then(() => resumeEmsWork(clients, refreshList)).catch((error) => announce(directoryError, "No se pudo recuperar la última pantalla. Tus fotos y borradores siguen disponibles en el cliente. " + error.message));
+void refreshList().then(async () => {
+  if (location.hash === "#rutina-recibida" && receivedRoutine()) {
+    const opened = await startRoutineAssignment();
+    if (opened) { history.replaceState(null, "", location.pathname + location.search); return; }
+  }
+  await resumeEmsWork(clients, refreshList);
+}).catch((error) => announce(directoryError, "No se pudo recuperar la última pantalla. Tus fotos y borradores siguen disponibles en el cliente. " + error.message));

@@ -167,6 +167,8 @@ async function showOverview() {
   photoReference.hidden = true;
   const sessions = (client.emsSessions ?? []).filter(hasSessionData);
   const cycle = client.trainingCycles?.find((item) => item.id === client.activeCycleId);
+  byId("ems-routine-name").hidden = !cycle;
+  byId("ems-routine-name").textContent = cycle ? "Rutina: " + cycle.routine.title : "";
   const card = byId("training-cycle-card"); card.replaceChildren();
   const heading = document.createElement("strong"), description = document.createElement("p");
   heading.textContent = cycle ? cycle.routine.title : "Prepara su ciclo de cuatro semanas";

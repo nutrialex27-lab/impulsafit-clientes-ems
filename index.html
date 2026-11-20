@@ -18,7 +18,7 @@
       <div class="brand">
         <img class="brand-mark" src="./icon-192.png?v=7" alt="" width="38" height="38">
         <span>Registro EMS</span>
-        <small class="brand-version" id="app-version">v23</small>
+        <small class="brand-version" id="app-version">v24</small>
       </div>
       <nav aria-label="Herramientas">
         <button class="top-action" id="backups-button" type="button">Copias</button>
@@ -66,7 +66,7 @@
       <p class="directory-error" id="directory-error" role="alert" hidden></p>
     </section>
     <p class="feedback" id="feedback" role="status"></p>
-    <p class="routine-inbox-notice" id="routine-inbox-notice" hidden>Hay una rutina de Impulsagen preparada. Abre un cliente y pulsa «Plan de cuatro semanas» para asignársela.</p>
+    <div class="routine-inbox-notice" id="routine-inbox-notice" hidden><p>Hay una rutina de Impulsagen pendiente de asignar.</p><button class="button primary" id="choose-routine-client" type="button">Elegir cliente</button></div>
     <noscript><p>Activa JavaScript para gestionar tus fichas.</p></noscript>
   </main>
 
@@ -122,6 +122,7 @@
     <div class="dialog-heading">
       <h2 id="ems-title">Sesiones EMS</h2>
       <p class="dialog-caption ems-client" id="ems-client"></p>
+      <p class="dialog-caption ems-routine-name" id="ems-routine-name" hidden></p>
     </div>
 
     <section id="ems-overview" aria-labelledby="ems-history-title">

@@ -74,6 +74,14 @@ export function receivedRoutine() {
   try { const value = localStorage.getItem(routineInbox); return value ? decodeRoutine(value) : null; } catch { return null; }
 }
 
+export function consumeReceivedRoutine(id) {
+  // Do not discard a newer routine that arrived while this one was being assigned.
+  if (receivedRoutine()?.id !== id) return false;
+  localStorage.removeItem(routineInbox);
+  window.dispatchEvent(new Event("ems-routine-assigned"));
+  return true;
+}
+
 export function readCycle(input) {
   if (!object(input) || !validDate(input.startDate)) throw new Error("Introduce una fecha válida para iniciar el ciclo.");
   return { id: text(input.id, 100, "Identificador de ciclo", true), startDate: input.startDate,

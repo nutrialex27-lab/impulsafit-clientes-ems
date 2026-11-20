@@ -1,18 +1,18 @@
-import { saveTrainingCycle, today } from "./client-store.js";
-import { cycleEnd, decodeRoutine, receivedRoutine } from "./ems-training.js";
+import { clientCode, saveTrainingCycle, today } from "./client-store.js";
+import { consumeReceivedRoutine, cycleEnd, decodeRoutine } from "./ems-training.js";
 
 const dialog = document.createElement("dialog");
 dialog.className = "training-dialog";
 dialog.setAttribute("aria-labelledby", "cycle-title");
 dialog.innerHTML = `<form id="cycle-form">
   <div class="dialog-heading"><h2 id="cycle-title">Plan de cuatro semanas</h2><p class="dialog-caption" id="cycle-client"></p></div>
-  <p class="training-help">Guarda una copia de la rutina para este cliente. Los cambios posteriores en el generador no modifican este ciclo.</p>
-  <div class="training-actions"><button class="button secondary" id="cycle-received" type="button">Usar rutina recibida</button><button class="button secondary" id="cycle-import" type="button">Elegir archivo de rutina</button></div>
+  <p class="training-help" id="cycle-purpose">Guarda una copia de la rutina para este cliente. Los cambios posteriores en el generador no modifican este ciclo.</p>
+  <div class="training-actions" id="cycle-source-actions"><button class="button secondary" id="cycle-import" type="button">Elegir archivo de rutina</button></div>
   <input id="cycle-file" type="file" accept="application/json,.json" hidden>
-  <p class="training-help">En Impulsagen, pulsa «Usar en Registro EMS». También puedes descargar allí el archivo de la rutina para traerlo a otro dispositivo.</p>
+  <p class="training-help" id="cycle-source-help">En Impulsagen, pulsa «Usar en Registro EMS» y elige el cliente. También puedes descargar allí el archivo de la rutina para traerlo a otro dispositivo.</p>
   <div id="cycle-preview" class="training-preview" hidden></div>
   <div class="training-fields">
-    <label class="ems-field"><span>Nombre del ciclo</span><input id="cycle-name" maxlength="140" required></label>
+    <label class="ems-field" id="cycle-name-field"><span>Nombre del ciclo</span><input id="cycle-name" maxlength="140" required></label>
     <div class="ems-controls"><label class="ems-field"><span>Fecha de inicio</span><input id="cycle-date" type="date" required></label>
     <label class="ems-field"><span>Visitas previstas por semana</span><select id="cycle-frequency"><option value="1">1 · 4 sesiones previstas</option><option value="2">2 · 8 sesiones previstas</option></select></label></div>
     <label class="ems-field"><span>Experiencia con EMS</span><select id="cycle-experience"><option value="">Por revisar</option><option value="adaptation">En familiarización</option><option value="adapted">Cliente adaptado</option></select></label>
@@ -23,7 +23,7 @@ dialog.innerHTML = `<form id="cycle-form">
 </form>`;
 document.body.append(dialog);
 const byId = (id) => dialog.querySelector("#" + id);
-let client, onSave, routine, saving = false;
+let client, onSave, routine, saving = false, incomingId = null;
 
 function preview(value) {
   routine = value;
@@ -37,24 +37,30 @@ function preview(value) {
     item.textContent = block.name + " · " + block.rounds + (block.rounds === 1 ? " toma" : " vueltas") + " · " + block.exercises.map((exercise) => exercise.name).join("; ");
     list.append(item);
   }
-  root.append(list);
+  const details = document.createElement("details"), summary = document.createElement("summary");
+  summary.textContent = "Ver rutina · " + routine.blocks.length + " bloques";
+  details.append(summary, list); root.append(details);
 }
 
-export function openCycleEditor(selectedClient, update) {
+export function openCycleEditor(selectedClient, update, options = {}) {
   client = selectedClient; onSave = update; routine = null;
-  byId("cycle-client").textContent = client.name;
+  incomingId = options.routine?.id ?? null;
+  byId("cycle-title").textContent = incomingId ? "Asignar rutina" : "Plan de cuatro semanas";
+  byId("cycle-client").textContent = client.name + " · " + clientCode(client.id);
+  byId("cycle-purpose").textContent = incomingId ? "La rutina quedará guardada solo en la ficha de este cliente." : "Guarda una copia de la rutina para este cliente. Los cambios posteriores en el generador no modifican este ciclo.";
+  byId("cycle-source-actions").hidden = Boolean(incomingId); byId("cycle-source-help").hidden = Boolean(incomingId);
+  byId("cycle-name-field").hidden = Boolean(incomingId);
+  byId("cycle-save").textContent = incomingId ? "Asignar rutina" : "Iniciar ciclo";
   byId("cycle-form").reset(); byId("cycle-date").value = today();
+  const previous = client.trainingCycles?.find((item) => item.id === client.activeCycleId);
+  if (previous) { byId("cycle-frequency").value = previous.frequency; byId("cycle-experience").value = previous.experience; }
   byId("cycle-error").hidden = true; byId("cycle-preview").hidden = true;
-  const received = receivedRoutine(); byId("cycle-received").disabled = !received;
-  if (received) preview(received);
+  if (options.routine) preview(options.routine);
   dialog.showModal();
 }
 
 byId("cycle-cancel").addEventListener("click", () => { if (!saving) dialog.close(); });
 dialog.addEventListener("cancel", (event) => { if (saving) event.preventDefault(); });
-byId("cycle-received").addEventListener("click", () => {
-  const received = receivedRoutine(); if (received) preview(received);
-});
 byId("cycle-import").addEventListener("click", () => { byId("cycle-file").value = ""; byId("cycle-file").click(); });
 byId("cycle-file").addEventListener("change", async (event) => {
   const file = event.target.files[0]; if (!file) return;
@@ -62,7 +68,7 @@ byId("cycle-file").addEventListener("change", async (event) => {
     if (file.size > 2_000_000) throw new Error("El archivo de rutina es demasiado grande.");
     const imported = decodeRoutine(await file.text());
     if (!dialog.open || event.target.files[0] !== file) return;
-    preview(imported); byId("cycle-error").hidden = true;
+    incomingId = null; preview(imported); byId("cycle-error").hidden = true;
   } catch (failure) { byId("cycle-error").textContent = failure.message; byId("cycle-error").hidden = false; }
 });
 byId("cycle-form").addEventListener("submit", async (event) => {
@@ -72,7 +78,8 @@ byId("cycle-form").addEventListener("submit", async (event) => {
     if (!routine) throw new Error("Trae una rutina de Impulsagen antes de iniciar el ciclo.");
     const updated = await saveTrainingCycle({ startDate: byId("cycle-date").value, frequency: Number(byId("cycle-frequency").value),
       experience: byId("cycle-experience").value, routine: { ...routine, title: byId("cycle-name").value } }, client);
-    onSave(updated); dialog.close();
+    if (incomingId) consumeReceivedRoutine(incomingId);
+    dialog.close(); onSave(updated);
   } catch (failure) { byId("cycle-error").textContent = failure.message; byId("cycle-error").hidden = false; }
   finally { saving = false; byId("cycle-save").disabled = false; byId("cycle-cancel").disabled = false; }
 });

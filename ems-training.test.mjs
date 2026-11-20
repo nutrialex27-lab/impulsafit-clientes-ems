@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readSession } from "./ems-sessions.js";
 import { encodeBackup, decodeBackup } from "./client-store.js";
-import { blockSuggestion, compareKey, cycleEnd, decodeRoutine, hasSessionData, latestLoads, previousSession, readCycle, readRoutine, readTrainingDetails } from "./ems-training.js";
+import { blockSuggestion, compareKey, consumeReceivedRoutine, cycleEnd, decodeRoutine, hasSessionData, latestLoads, previousSession, readCycle, readRoutine, readTrainingDetails, receivedRoutine, routineInbox } from "./ems-training.js";
 import { reportData } from "./ems-progress.js";
 
 const routine = () => readRoutine({ id: "routine-1", title: "Rutina de prueba", kind: "metabolic", blocks: [
@@ -12,6 +12,24 @@ const routine = () => readRoutine({ id: "routine-1", title: "Rutina de prueba", 
 const cycle = () => readCycle({ id: "cycle-1", startDate: "2026-11-19", frequency: 2, experience: "adapted", routine: routine() });
 const session = (id = "a", date = "2026-11-19") => ({ id, date, cycleId: "cycle-1", routine: routine(), blocks: { fullBody: { rounds: [{ master: 40, quads: 0, dorsal: 30 }, { master: 43, dorsal: 31 }] } },
   followup: { recovery: "good", loads: { row: { kg: 5, unit: "each", note: "", confirmed: true } }, feedback: { fullBody: { perception: "low", technique: "good", sensation: 5, zones: { dorsal: "low" } } }, sources: {} } });
+
+test("a confirmed assignment consumes only that incoming routine and preserves a newer handoff", () => {
+  const memory = new Map();
+  globalThis.localStorage = { getItem: (key) => memory.get(key) ?? null, setItem: (key, value) => memory.set(key, value), removeItem: (key) => memory.delete(key) };
+  globalThis.window = new EventTarget();
+  const storeRoutine = (value) => localStorage.setItem(routineInbox, JSON.stringify({ format: "registro-ems-routine", version: 1, routine: value }));
+  storeRoutine(routine());
+  assert.equal(receivedRoutine().id, "routine-1");
+  assert.equal(consumeReceivedRoutine("another-routine"), false);
+  assert.equal(receivedRoutine().id, "routine-1");
+  let assigned = 0; window.addEventListener("ems-routine-assigned", () => assigned++);
+  assert.equal(consumeReceivedRoutine("routine-1"), true);
+  assert.equal(receivedRoutine(), null); assert.equal(assigned, 1);
+  storeRoutine({ ...routine(), id: "new-routine" });
+  assert.equal(consumeReceivedRoutine("routine-1"), false);
+  assert.equal(receivedRoutine().id, "new-routine");
+  delete globalThis.localStorage; delete globalThis.window;
+});
 
 test("a four-week snapshot survives future generator changes and supports repeated phases", () => {
   const input = routine(), frozen = readRoutine(input);
